@@ -5,6 +5,7 @@
  */
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <string_view>
 #include <vector>
@@ -619,6 +620,13 @@ enum class AffixItemType : uint8_t {
 };
 use_enum_as_flags(AffixItemType);
 
+enum class ItemRarityTier : uint8_t {
+	Common,
+	Magic,
+	Rare,
+	Ancient,
+};
+
 struct ItemPower {
 	item_effect_type type = IPL_INVALID;
 	int param1 = 0;
@@ -649,10 +657,29 @@ struct UniqueItem {
 	int32_t mappingId;
 };
 
+struct ItemRarityWeights {
+	uint8_t minLevel;
+	std::array<uint16_t, 4> normal;
+	std::array<uint16_t, 4> nightmare;
+	std::array<uint16_t, 4> hell;
+};
+
+struct ItemRarityCurve {
+	ItemRarityTier tier;
+	uint8_t minAffixes;
+	uint8_t maxAffixes;
+	int16_t minBudgetPermille;
+	int16_t maxBudgetPermille;
+	int16_t progressionScalingPermille;
+	int16_t deterministicVariancePermille;
+};
+
 extern DVL_API_FOR_TEST std::vector<ItemData> AllItemsList;
 extern ankerl::unordered_dense::map<int32_t, int16_t> ItemMappingIdsToIndices;
 extern std::vector<PLStruct> ItemPrefixes;
 extern std::vector<PLStruct> ItemSuffixes;
+extern std::vector<ItemRarityWeights> ItemRarityWeightsTable;
+extern std::vector<ItemRarityCurve> ItemRarityCurves;
 extern DVL_API_FOR_TEST std::vector<UniqueItem> UniqueItems;
 extern ankerl::unordered_dense::map<int32_t, int32_t> UniqueItemMappingIdsToIndices;
 

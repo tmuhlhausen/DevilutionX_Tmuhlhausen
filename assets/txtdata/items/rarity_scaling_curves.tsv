@@ -1,0 +1,5 @@
+tier	minAffixes	maxAffixes	minBudgetPermille	maxBudgetPermille	progressionScalingPermille	deterministicVariancePermille
+Common	0	0	1000	1000	0	0
+Magic	1	1	850	1125	0	30
+Rare	1	2	1000	1300	0	50
+Ancient	2	2	1250	1650	45	140

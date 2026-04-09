@@ -1045,12 +1045,140 @@ int PLVal(int pv, int p1, int p2, int minv, int maxv)
 	return minv + ((maxv - minv) * (100 * (pv - p1) / (p2 - p1)) / 100);
 }
 
-void SaveItemAffix(const Player &player, Item &item, const PLStruct &affix)
+struct AffixGenerationOptions {
+	int minAffixes = 1;
+	int maxAffixes = 2;
+	int budgetPermille = 1000;
+};
+
+uint32_t HashItemSeed(uint32_t seed, uint32_t salt)
+{
+	uint32_t value = seed ^ salt;
+	value ^= value << 13;
+	value ^= value >> 17;
+	value ^= value << 5;
+	return value;
+}
+
+int DeterministicSignedRange(uint32_t seed, uint32_t salt, int absoluteRange)
+{
+	if (absoluteRange <= 0)
+		return 0;
+
+	const uint32_t hash = HashItemSeed(seed, salt);
+	const int spread = absoluteRange * 2 + 1;
+	return static_cast<int>(hash % static_cast<uint32_t>(spread)) - absoluteRange;
+}
+
+const ItemRarityCurve &GetRarityCurve(ItemRarityTier tier)
+{
+	const auto it = std::find_if(ItemRarityCurves.begin(), ItemRarityCurves.end(), [tier](const ItemRarityCurve &curve) {
+		return curve.tier == tier;
+	});
+	if (it != ItemRarityCurves.end())
+		return *it;
+
+	static const ItemRarityCurve fallbackCurve {
+		ItemRarityTier::Magic,
+		1,
+		2,
+		1000,
+		1000,
+		0,
+		0,
+	};
+	return fallbackCurve;
+}
+
+const ItemRarityWeights &GetRarityWeightsForLevel(int level)
+{
+	if (ItemRarityWeightsTable.empty()) {
+		static const ItemRarityWeights fallback {
+			0,
+			{ 65, 28, 6, 1 },
+			{ 45, 35, 16, 4 },
+			{ 30, 38, 24, 8 },
+		};
+		return fallback;
+	}
+
+	const ItemRarityWeights *weights = &ItemRarityWeightsTable.front();
+	for (const ItemRarityWeights &entry : ItemRarityWeightsTable) {
+		if (entry.minLevel > level)
+			break;
+		weights = &entry;
+	}
+	return *weights;
+}
+
+ItemRarityTier RollRarityTier(int level)
+{
+	const ItemRarityWeights &weights = GetRarityWeightsForLevel(level);
+	const std::array<uint16_t, 4> *difficultyWeights = &weights.normal;
+	switch (sgGameInitInfo.nDifficulty) {
+	case DIFF_NORMAL:
+		difficultyWeights = &weights.normal;
+		break;
+	case DIFF_NIGHTMARE:
+		difficultyWeights = &weights.nightmare;
+		break;
+	case DIFF_HELL:
+		difficultyWeights = &weights.hell;
+		break;
+	}
+
+	uint32_t totalWeight = 0;
+	for (uint16_t weight : *difficultyWeights) {
+		totalWeight += weight;
+	}
+	if (totalWeight == 0)
+		return ItemRarityTier::Common;
+
+	const uint32_t roll = static_cast<uint32_t>(GenerateRnd(static_cast<int32_t>(totalWeight)));
+	uint32_t cursor = 0;
+	for (size_t i = 0; i < difficultyWeights->size(); ++i) {
+		cursor += (*difficultyWeights)[i];
+		if (roll < cursor)
+			return static_cast<ItemRarityTier>(i);
+	}
+
+	return ItemRarityTier::Common;
+}
+
+AffixGenerationOptions BuildAffixOptions(const Player &player, const Item &item, ItemRarityTier tier)
+{
+	const ItemRarityCurve &curve = GetRarityCurve(tier);
+	const int affixSpan = std::max(0, curve.maxAffixes - curve.minAffixes);
+	const int rolledAffixes = curve.minAffixes + (affixSpan > 0 ? GenerateRnd(affixSpan + 1) : 0);
+
+	const int budgetSpan = std::max(0, curve.maxBudgetPermille - curve.minBudgetPermille);
+	int budgetPermille = curve.minBudgetPermille + (budgetSpan > 0 ? GenerateRnd(budgetSpan + 1) : 0);
+
+	if (tier == ItemRarityTier::Ancient) {
+		const int effectiveProgression = std::min<int>(player.getCharacterLevel(), 99) + static_cast<int>(player.getNephilimLevel());
+		const int progressionPermille = 1000 + (curve.progressionScalingPermille * effectiveProgression / 100);
+		const int variance = DeterministicSignedRange(item._iSeed, 0xA11CE2U, curve.deterministicVariancePermille);
+		const int deterministicPermille = 1000 + variance;
+		budgetPermille = std::max(250, budgetPermille * progressionPermille / 1000 * deterministicPermille / 1000);
+	}
+
+	return {
+		.minAffixes = rolledAffixes,
+		.maxAffixes = rolledAffixes,
+		.budgetPermille = budgetPermille,
+	};
+}
+
+void SaveItemAffix(const Player &player, Item &item, const PLStruct &affix, int budgetPermille = 1000)
 {
 	auto power = affix.power;
 	int value = SaveItemPower(player, item, power);
 
 	value = PLVal(value, power.param1, power.param2, affix.minVal, affix.maxVal);
+	if (budgetPermille != 1000 && value != 0) {
+		const int scaled = value * budgetPermille / 1000;
+		value = scaled == 0 ? (value > 0 ? 1 : -1) : scaled;
+	}
 	if (item._iVAdd1 != 0 || item._iVMult1 != 0) {
 		item._iVAdd2 = value;
 		item._iVMult2 = affix.multVal;
@@ -1175,18 +1303,20 @@ void GetItemPowerPrefixAndSuffix(
     int minlvl, int maxlvl,
     AffixItemType flgs,
     bool onlygood,
+    const AffixGenerationOptions &options,
     tl::function_ref<void(const PLStruct &prefix)> prefixFound,
     tl::function_ref<void(const PLStruct &suffix)> suffixFound)
 {
-	bool allocatePrefix = FlipCoin(4);
-	bool allocateSuffix = !FlipCoin(3);
-	if (!allocatePrefix && !allocateSuffix) {
-		// At least try and give each item a prefix or suffix
-		if (FlipCoin())
-			allocatePrefix = true;
-		else
-			allocateSuffix = true;
+	const int clampedMinAffixes = std::clamp(options.minAffixes, 0, 2);
+	const int clampedMaxAffixes = std::clamp(options.maxAffixes, clampedMinAffixes, 2);
+	const int desiredAffixes = clampedMinAffixes + (clampedMinAffixes != clampedMaxAffixes ? GenerateRnd(clampedMaxAffixes - clampedMinAffixes + 1) : 0);
+	bool allocatePrefix = desiredAffixes >= 1;
+	bool allocateSuffix = desiredAffixes >= 2;
+	if (desiredAffixes == 1) {
+		allocatePrefix = FlipCoin();
+		allocateSuffix = !allocatePrefix;
 	}
+
 	goodorevil goe = GOE_ANY;
 	if (!onlygood && !FlipCoin(3))
 		onlygood = true;
@@ -1196,6 +1326,8 @@ void GetItemPowerPrefixAndSuffix(
 		if (prefix.has_value()) {
 			goe = (*prefix)->PLGOE;
 			prefixFound(**prefix);
+		} else {
+			allocateSuffix = false;
 		}
 	}
 
@@ -1207,21 +1339,21 @@ void GetItemPowerPrefixAndSuffix(
 	}
 }
 
-void GetItemPower(const Player &player, Item &item, int minlvl, int maxlvl, AffixItemType flgs, bool onlygood)
+void GetItemPower(const Player &player, Item &item, int minlvl, int maxlvl, AffixItemType flgs, bool onlygood, const AffixGenerationOptions &options = {})
 {
 	const PLStruct *pPrefix = nullptr;
 	const PLStruct *pSufix = nullptr;
 	GetItemPowerPrefixAndSuffix(
-	    minlvl, maxlvl, flgs, onlygood,
-	    [&item, &player, &pPrefix](const PLStruct &prefix) {
+	    minlvl, maxlvl, flgs, onlygood, options,
+	    [&item, &player, &pPrefix, &options](const PLStruct &prefix) {
 		    item._iMagical = ITEM_QUALITY_MAGIC;
-		    SaveItemAffix(player, item, prefix);
+		    SaveItemAffix(player, item, prefix, options.budgetPermille);
 		    item._iPrePower = prefix.power.type;
 		    pPrefix = &prefix;
 	    },
-	    [&item, &player, &pSufix](const PLStruct &suffix) {
+	    [&item, &player, &pSufix, &options](const PLStruct &suffix) {
 		    item._iMagical = ITEM_QUALITY_MAGIC;
-		    SaveItemAffix(player, item, suffix);
+		    SaveItemAffix(player, item, suffix, options.budgetPermille);
 		    item._iSufPower = suffix.power.type;
 		    pSufix = &suffix;
 	    });
@@ -1306,7 +1438,7 @@ void GetOilType(Item &item, int maxLvl)
 	item._iIvalue = OilValues[t];
 }
 
-void GetItemBonus(const Player &player, Item &item, int minlvl, int maxlvl, bool onlygood, bool allowspells)
+void GetItemBonus(const Player &player, Item &item, int minlvl, int maxlvl, bool onlygood, bool allowspells, const AffixGenerationOptions &options = {})
 {
 	minlvl = std::min(minlvl, 25);
 
@@ -1314,29 +1446,29 @@ void GetItemBonus(const Player &player, Item &item, int minlvl, int maxlvl, bool
 	case ItemType::Sword:
 	case ItemType::Axe:
 	case ItemType::Mace:
-		GetItemPower(player, item, minlvl, maxlvl, AffixItemType::Weapon, onlygood);
+		GetItemPower(player, item, minlvl, maxlvl, AffixItemType::Weapon, onlygood, options);
 		break;
 	case ItemType::Bow:
-		GetItemPower(player, item, minlvl, maxlvl, AffixItemType::Bow, onlygood);
+		GetItemPower(player, item, minlvl, maxlvl, AffixItemType::Bow, onlygood, options);
 		break;
 	case ItemType::Shield:
-		GetItemPower(player, item, minlvl, maxlvl, AffixItemType::Shield, onlygood);
+		GetItemPower(player, item, minlvl, maxlvl, AffixItemType::Shield, onlygood, options);
 		break;
 	case ItemType::LightArmor:
 	case ItemType::Helm:
 	case ItemType::MediumArmor:
 	case ItemType::HeavyArmor:
-		GetItemPower(player, item, minlvl, maxlvl, AffixItemType::Armor, onlygood);
+		GetItemPower(player, item, minlvl, maxlvl, AffixItemType::Armor, onlygood, options);
 		break;
 	case ItemType::Staff:
 		if (allowspells)
 			GetStaffSpell(player, item, maxlvl, onlygood);
 		else
-			GetItemPower(player, item, minlvl, maxlvl, AffixItemType::Staff, onlygood);
+			GetItemPower(player, item, minlvl, maxlvl, AffixItemType::Staff, onlygood, options);
 		break;
 	case ItemType::Ring:
 	case ItemType::Amulet:
-		GetItemPower(player, item, minlvl, maxlvl, AffixItemType::Misc, onlygood);
+		GetItemPower(player, item, minlvl, maxlvl, AffixItemType::Misc, onlygood, options);
 		break;
 	case ItemType::None:
 	case ItemType::Misc:
@@ -2337,7 +2469,7 @@ std::string GetTranslatedItemNameMagical(const Item &item, bool hellfireItem, bo
 		const PLStruct *pPrefix = nullptr;
 		const PLStruct *pSufix = nullptr;
 		GetItemPowerPrefixAndSuffix(
-		    minlvl, maxlvl, affixItemType, onlygood,
+		    minlvl, maxlvl, affixItemType, onlygood, {},
 		    [&pPrefix](const PLStruct &prefix) {
 			    pPrefix = &prefix;
 			    // GenerateRnd(prefix.power.param2 - prefix.power.param2 + 1)
@@ -3263,6 +3395,8 @@ void SetupAllItems(const Player &player, Item &item, _item_indexes idx, uint32_t
 {
 	item._iSeed = iseed;
 	SetRndSeed(iseed);
+
+	// Stage 1: roll the base item.
 	GetItemAttrs(item, idx, lvl / 2);
 	item._iCreateInfo = lvl;
 
@@ -3279,6 +3413,11 @@ void SetupAllItems(const Player &player, Item &item, _item_indexes idx, uint32_t
 	if (item._iMiscId != IMISC_UNIQUE) {
 		const int iblvl = GetItemBLevel(lvl, item._iMiscId, onlygood, uper == 15);
 		if (iblvl != -1) {
+			// Stage 2: roll rarity tier from tables and current difficulty.
+			const ItemRarityTier rarityTier = RollRarityTier(lvl);
+			// Stage 3: derive tier-specific affix budget (Ancient uses deterministic progression scaling).
+			const AffixGenerationOptions affixOptions = BuildAffixOptions(player, item, rarityTier);
+
 			_unique_items uid = UITEM_INVALID;
 			if (!forceNotUnique) {
 				uid = CheckUnique(item, iblvl, uper, uidOffset);
@@ -3286,7 +3425,9 @@ void SetupAllItems(const Player &player, Item &item, _item_indexes idx, uint32_t
 				DiscardRandomValues(1);
 			}
 			if (uid == UITEM_INVALID) {
-				GetItemBonus(player, item, iblvl / 2, iblvl, onlygood, true);
+				if (rarityTier != ItemRarityTier::Common) {
+					GetItemBonus(player, item, iblvl / 2, iblvl, onlygood, true, affixOptions);
+				}
 			} else {
 				GetUniqueItem(player, item, uid);
 			}
