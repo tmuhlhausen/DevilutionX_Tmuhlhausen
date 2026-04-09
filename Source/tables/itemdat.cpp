@@ -7,6 +7,7 @@
 #include "tables/itemdat.h"
 
 #include <string_view>
+#include <unordered_set>
 #include <vector>
 
 #include <fmt/format.h>
@@ -46,6 +47,15 @@ std::vector<ItemRarityWeights> ItemRarityWeightsTable;
 
 /** Contains stage-3 affix budget curves per rarity tier. */
 std::vector<ItemRarityCurve> ItemRarityCurves;
+
+/** Contains set definitions and their piece bonuses. */
+std::vector<SetDefinition> ItemSetDefinitions;
+
+/** Contains legendary/ancient template budget and scaling definitions. */
+std::vector<LegendaryTemplateDefinition> LegendaryTemplateDefinitions;
+
+/** Contains guild reward tables keyed by activity milestones. */
+std::vector<GuildRewardDefinition> GuildRewardDefinitions;
 
 tl::expected<_item_indexes, std::string> ParseItemId(std::string_view value)
 {
@@ -576,6 +586,37 @@ tl::expected<ItemRarityTier, std::string> ParseItemRarityTier(std::string_view v
 	return tl::make_unexpected("Unknown enum value");
 }
 
+tl::expected<GuildActivityType, std::string> ParseGuildActivityType(std::string_view value)
+{
+	if (value == "DungeonClear") return GuildActivityType::DungeonClear;
+	if (value == "BossKill") return GuildActivityType::BossKill;
+	if (value == "Bounty") return GuildActivityType::Bounty;
+	if (value == "PvPWin") return GuildActivityType::PvPWin;
+	if (value == "Crafting") return GuildActivityType::Crafting;
+	return tl::make_unexpected("Unknown enum value");
+}
+
+void ReadSetPieceBonus(RecordReader &reader, std::string_view fieldPrefix, SetPieceBonusDefinition &bonus)
+{
+	std::string_view powerValue = reader.value();
+	if (powerValue.empty()) {
+		bonus.power = IPL_INVALID;
+		bonus.value1 = 0;
+		bonus.value2 = 0;
+		reader.readOptionalInt(StrCat(fieldPrefix, ".value1"), bonus.value1);
+		reader.readOptionalInt(StrCat(fieldPrefix, ".value2"), bonus.value2);
+		return;
+	}
+
+	tl::expected<item_effect_type, std::string> parsedPower = ParseItemEffectType(powerValue);
+	if (!parsedPower.has_value()) {
+		DisplayFatalErrorAndExit("Loading Set Definitions Failed", fmt::format("{} contains invalid power \"{}\": {}.", fieldPrefix, powerValue, parsedPower.error()));
+	}
+	bonus.power = *parsedPower;
+	reader.readOptionalInt(StrCat(fieldPrefix, ".value1"), bonus.value1);
+	reader.readOptionalInt(StrCat(fieldPrefix, ".value2"), bonus.value2);
+}
+
 } // namespace
 
 void LoadItemDatFromFile(DataFile &dataFile, std::string_view filename, int32_t baseMappingId)
@@ -788,6 +829,133 @@ void LoadItemRarityCurvesDat()
 	ItemRarityCurves.shrink_to_fit();
 }
 
+void LoadSetDefinitionsDat()
+{
+	constexpr std::string_view filename = "txtdata\\items\\set_definitions.tsv";
+	DataFile dataFile = DataFile::loadOrDie(filename);
+	dataFile.skipHeaderOrDie(filename);
+
+	ItemSetDefinitions.clear();
+	ItemSetDefinitions.reserve(dataFile.numRecords());
+	std::unordered_set<std::string> seenSetIds;
+	for (DataFileRecord record : dataFile) {
+		RecordReader reader { record, filename };
+		SetDefinition &set = ItemSetDefinitions.emplace_back();
+		reader.readString("setId", set.setId);
+		reader.readInt("pieces", set.pieces);
+		reader.readInt("minNephilimLevel", set.minNephilimLevel);
+		ReadSetPieceBonus(reader, "bonus2", set.twoPieceBonus);
+		ReadSetPieceBonus(reader, "bonus3", set.threePieceBonus);
+		ReadSetPieceBonus(reader, "bonus4", set.fourPieceBonus);
+
+		if (set.setId.empty()) {
+			DisplayFatalErrorAndExit("Loading Set Definitions Failed", "setId must not be empty.");
+		}
+		if (!seenSetIds.emplace(set.setId).second) {
+			DisplayFatalErrorAndExit("Loading Set Definitions Failed", fmt::format("Duplicate setId \"{}\".", set.setId));
+		}
+		if (set.pieces < 2 || set.pieces > 4) {
+			DisplayFatalErrorAndExit("Loading Set Definitions Failed", fmt::format("setId \"{}\" has invalid pieces value {} (must be in range [2,4]).", set.setId, set.pieces));
+		}
+
+		const auto requireBonus = [&](uint8_t threshold, const SetPieceBonusDefinition &bonus) {
+			if (set.pieces >= threshold && bonus.power == IPL_INVALID) {
+				DisplayFatalErrorAndExit("Loading Set Definitions Failed", fmt::format("setId \"{}\" is missing bonus{} data.", set.setId, threshold));
+			}
+			if (set.pieces < threshold && bonus.power != IPL_INVALID) {
+				DisplayFatalErrorAndExit("Loading Set Definitions Failed", fmt::format("setId \"{}\" defines bonus{} but only has {} pieces.", set.setId, threshold, set.pieces));
+			}
+		};
+		requireBonus(2, set.twoPieceBonus);
+		requireBonus(3, set.threePieceBonus);
+		requireBonus(4, set.fourPieceBonus);
+	}
+	ItemSetDefinitions.shrink_to_fit();
+}
+
+void LoadLegendaryTemplatesDat()
+{
+	constexpr std::string_view filename = "txtdata\\items\\legendary_ancient_templates.tsv";
+	DataFile dataFile = DataFile::loadOrDie(filename);
+	dataFile.skipHeaderOrDie(filename);
+
+	LegendaryTemplateDefinitions.clear();
+	LegendaryTemplateDefinitions.reserve(dataFile.numRecords());
+	std::unordered_set<std::string> seenTemplateIds;
+	for (DataFileRecord record : dataFile) {
+		RecordReader reader { record, filename };
+		LegendaryTemplateDefinition &templ = LegendaryTemplateDefinitions.emplace_back();
+		reader.readString("templateId", templ.templateId);
+		reader.read("tier", templ.tier, ParseItemRarityTier);
+		reader.readInt("minBudgetPermille", templ.minBudgetPermille);
+		reader.readInt("maxBudgetPermille", templ.maxBudgetPermille);
+		reader.readInt("scalingBasePermille", templ.scalingBasePermille);
+		reader.readInt("scalingPerLevelPermille", templ.scalingPerLevelPermille);
+
+		if (templ.templateId.empty()) {
+			DisplayFatalErrorAndExit("Loading Legendary Templates Failed", "templateId must not be empty.");
+		}
+		if (!seenTemplateIds.emplace(templ.templateId).second) {
+			DisplayFatalErrorAndExit("Loading Legendary Templates Failed", fmt::format("Duplicate templateId \"{}\".", templ.templateId));
+		}
+		if (templ.minBudgetPermille > templ.maxBudgetPermille) {
+			DisplayFatalErrorAndExit("Loading Legendary Templates Failed", fmt::format("templateId \"{}\" has minBudgetPermille {} greater than maxBudgetPermille {}.", templ.templateId, templ.minBudgetPermille, templ.maxBudgetPermille));
+		}
+		if (templ.scalingBasePermille < 0 || templ.scalingPerLevelPermille < 0) {
+			DisplayFatalErrorAndExit("Loading Legendary Templates Failed", fmt::format("templateId \"{}\" has negative scaling values.", templ.templateId));
+		}
+	}
+	LegendaryTemplateDefinitions.shrink_to_fit();
+}
+
+void LoadGuildRewardTablesDat()
+{
+	constexpr std::string_view filename = "txtdata\\items\\guild_reward_tables.tsv";
+	DataFile dataFile = DataFile::loadOrDie(filename);
+	dataFile.skipHeaderOrDie(filename);
+
+	GuildRewardDefinitions.clear();
+	GuildRewardDefinitions.reserve(dataFile.numRecords());
+	std::unordered_set<std::string_view> knownTemplateIds;
+	knownTemplateIds.reserve(LegendaryTemplateDefinitions.size());
+	for (const LegendaryTemplateDefinition &templ : LegendaryTemplateDefinitions)
+		knownTemplateIds.emplace(templ.templateId);
+	std::unordered_set<std::string> seenRewardIds;
+	std::unordered_set<std::string> activityMilestones;
+	for (DataFileRecord record : dataFile) {
+		RecordReader reader { record, filename };
+		GuildRewardDefinition &reward = GuildRewardDefinitions.emplace_back();
+		reader.readString("rewardId", reward.rewardId);
+		reader.read("activity", reward.activity, ParseGuildActivityType);
+		reader.readInt("milestone", reward.milestone);
+		reader.readString("templateId", reward.templateId);
+		reader.readInt("rewardQuantity", reward.rewardQuantity);
+		reader.readInt("minGuildLevel", reward.minGuildLevel);
+
+		if (reward.rewardId.empty()) {
+			DisplayFatalErrorAndExit("Loading Guild Reward Tables Failed", "rewardId must not be empty.");
+		}
+		if (!seenRewardIds.emplace(reward.rewardId).second) {
+			DisplayFatalErrorAndExit("Loading Guild Reward Tables Failed", fmt::format("Duplicate rewardId \"{}\".", reward.rewardId));
+		}
+		if (reward.templateId.empty()) {
+			DisplayFatalErrorAndExit("Loading Guild Reward Tables Failed", fmt::format("rewardId \"{}\" is missing templateId.", reward.rewardId));
+		}
+		if (!knownTemplateIds.contains(reward.templateId)) {
+			DisplayFatalErrorAndExit("Loading Guild Reward Tables Failed", fmt::format("rewardId \"{}\" references unknown templateId \"{}\".", reward.rewardId, reward.templateId));
+		}
+		if (reward.rewardQuantity == 0) {
+			DisplayFatalErrorAndExit("Loading Guild Reward Tables Failed", fmt::format("rewardId \"{}\" has rewardQuantity 0.", reward.rewardId));
+		}
+
+		auto key = StrCat(static_cast<int>(reward.activity), ":", reward.milestone);
+		if (!activityMilestones.emplace(key).second) {
+			DisplayFatalErrorAndExit("Loading Guild Reward Tables Failed", fmt::format("Duplicate milestone {} for the same activity.", reward.milestone));
+		}
+	}
+	GuildRewardDefinitions.shrink_to_fit();
+}
+
 } // namespace
 
 void LoadItemData()
@@ -798,6 +966,9 @@ void LoadItemData()
 	LoadItemAffixesDat("txtdata\\items\\item_suffixes.tsv", ItemSuffixes);
 	LoadItemRarityWeightsDat();
 	LoadItemRarityCurvesDat();
+	LoadSetDefinitionsDat();
+	LoadLegendaryTemplatesDat();
+	LoadGuildRewardTablesDat();
 }
 
 std::string_view ItemTypeToString(ItemType itemType)

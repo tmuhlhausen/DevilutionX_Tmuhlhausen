@@ -1,0 +1,4 @@
+setId	pieces	minNephilimLevel	bonus2.power	bonus2.value1	bonus2.value2	bonus3.power	bonus3.value1	bonus3.value2	bonus4.power	bonus4.value1	bonus4.value2
+NEPHILIM_VANGUARD	4	30	ALLRES	12	0	FASTATTACK	10	0	TOHIT_DAMP	15	20
+ASHEN_ORACLE	3	38	MAG	20	0	SPLLVLADD	1	0			
+BLOODBOUND_SENTINEL	2	24	LIFE	25	0						
