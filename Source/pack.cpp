@@ -41,6 +41,7 @@
 namespace devilution {
 
 namespace {
+constexpr uint8_t PackedPlayerSaveRevision = 1;
 
 void EventFailedJoinAttempt(const char *playerName)
 {
@@ -198,6 +199,9 @@ void PackPlayer(PlayerPack &packed, const Player &player)
 	packed.wReflections = Swap16LE(player.wReflections);
 	packed.pDamAcFlags = Swap32LE(static_cast<uint32_t>(player.pDamAcFlags));
 	packed.pDiabloKillLevel = Swap32LE(player.pDiabloKillLevel);
+	packed.pSaveRevision = PackedPlayerSaveRevision;
+	packed.pNephilimLevel = player.pNephilimLevel;
+	packed.pNephilimExperience = Swap32LE(player.pNephilimExperience);
 	packed.bIsHellfire = gbIsHellfire ? 1 : 0;
 }
 
@@ -255,6 +259,8 @@ void PackNetPlayer(PlayerNetPack &packed, const Player &player)
 
 	packed.wReflections = Swap16LE(player.wReflections);
 	packed.pDiabloKillLevel = player.pDiabloKillLevel;
+	packed.pNephilimLevel = player.pNephilimLevel;
+	packed.pNephilimExperience = Swap32LE(player.pNephilimExperience);
 	packed.pManaShield = player.pManaShield;
 	packed.friendlyMode = player.friendlyMode ? 1 : 0;
 	packed.isOnSetLevel = player.plrIsOnSetLevel;
@@ -432,6 +438,8 @@ void UnPackPlayer(const PlayerPack &packed, Player &player)
 	CalcPlrInv(player, false);
 	player.wReflections = Swap16LE(packed.wReflections);
 	player.pDiabloKillLevel = Swap32LE(packed.pDiabloKillLevel);
+	player.pNephilimLevel = packed.pSaveRevision >= PackedPlayerSaveRevision ? packed.pNephilimLevel : 0;
+	player.pNephilimExperience = packed.pSaveRevision >= PackedPlayerSaveRevision ? Swap32LE(packed.pNephilimExperience) : 0;
 }
 
 bool UnPackNetItem(const Player &player, const ItemNetPack &packedItem, Item &item)
@@ -473,6 +481,8 @@ bool UnPackNetPlayer(const PlayerNetPack &packed, Player &player)
 	ValidateFields(position.x, position.y, InDungeonBounds(position));
 	ValidateField(packed.plrlevel, packed.plrlevel < NUMLEVELS);
 	ValidateField(packed.pLevel, packed.pLevel >= 1 && packed.pLevel <= player.getMaxCharacterLevel());
+	ValidateField(packed.pNephilimLevel, packed.pNephilimLevel <= player.getMaxCharacterLevel());
+	ValidateFields(packed.pLevel, packed.pNephilimLevel, packed.pLevel == player.getMaxCharacterLevel() || packed.pNephilimLevel == 0);
 
 	const int32_t baseHpMax = Swap32LE(packed.pMaxHPBase);
 	const int32_t baseHp = Swap32LE(packed.pHPBase);
@@ -523,6 +533,8 @@ bool UnPackNetPlayer(const PlayerNetPack &packed, Player &player)
 	player._pMemSpells = Swap64LE(packed.pMemSpells);
 	player.wReflections = Swap16LE(packed.wReflections);
 	player.pDiabloKillLevel = packed.pDiabloKillLevel;
+	player.pNephilimLevel = packed.pNephilimLevel;
+	player.pNephilimExperience = Swap32LE(packed.pNephilimExperience);
 	player.pManaShield = packed.pManaShield != 0;
 	player.friendlyMode = packed.friendlyMode != 0;
 
