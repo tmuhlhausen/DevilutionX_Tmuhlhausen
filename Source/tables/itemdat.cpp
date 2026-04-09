@@ -41,6 +41,12 @@ std::vector<PLStruct> ItemPrefixes;
 /** Contains the data related to each item suffix. */
 std::vector<PLStruct> ItemSuffixes;
 
+/** Contains stage-2 rarity roll weights. */
+std::vector<ItemRarityWeights> ItemRarityWeightsTable;
+
+/** Contains stage-3 affix budget curves per rarity tier. */
+std::vector<ItemRarityCurve> ItemRarityCurves;
+
 tl::expected<_item_indexes, std::string> ParseItemId(std::string_view value)
 {
 	const std::optional<_item_indexes> enumValueOpt = magic_enum::enum_cast<_item_indexes>(value);
@@ -561,6 +567,15 @@ tl::expected<goodorevil, std::string> ParseAffixAlignment(std::string_view value
 	return tl::make_unexpected("Unknown enum value");
 }
 
+tl::expected<ItemRarityTier, std::string> ParseItemRarityTier(std::string_view value)
+{
+	if (value == "Common") return ItemRarityTier::Common;
+	if (value == "Magic") return ItemRarityTier::Magic;
+	if (value == "Rare") return ItemRarityTier::Rare;
+	if (value == "Ancient") return ItemRarityTier::Ancient;
+	return tl::make_unexpected("Unknown enum value");
+}
+
 } // namespace
 
 void LoadItemDatFromFile(DataFile &dataFile, std::string_view filename, int32_t baseMappingId)
@@ -703,6 +718,76 @@ void LoadItemAffixesDat(std::string_view filename, std::vector<PLStruct> &out)
 	out.shrink_to_fit();
 }
 
+void LoadItemRarityWeightsDat()
+{
+	constexpr std::string_view filename = "txtdata\\items\\rarity_weights.tsv";
+	DataFile dataFile = DataFile::loadOrDie(filename);
+	dataFile.skipHeaderOrDie(filename);
+
+	ItemRarityWeightsTable.clear();
+	ItemRarityWeightsTable.reserve(dataFile.numRecords());
+	for (DataFileRecord record : dataFile) {
+		RecordReader reader { record, filename };
+		ItemRarityWeights &weights = ItemRarityWeightsTable.emplace_back();
+		reader.readInt("minLevel", weights.minLevel);
+		int value = 0;
+		reader.readInt("normal.Common", value);
+		weights.normal[static_cast<size_t>(ItemRarityTier::Common)] = value;
+		reader.readInt("normal.Magic", value);
+		weights.normal[static_cast<size_t>(ItemRarityTier::Magic)] = value;
+		reader.readInt("normal.Rare", value);
+		weights.normal[static_cast<size_t>(ItemRarityTier::Rare)] = value;
+		reader.readInt("normal.Ancient", value);
+		weights.normal[static_cast<size_t>(ItemRarityTier::Ancient)] = value;
+		reader.readInt("nightmare.Common", value);
+		weights.nightmare[static_cast<size_t>(ItemRarityTier::Common)] = value;
+		reader.readInt("nightmare.Magic", value);
+		weights.nightmare[static_cast<size_t>(ItemRarityTier::Magic)] = value;
+		reader.readInt("nightmare.Rare", value);
+		weights.nightmare[static_cast<size_t>(ItemRarityTier::Rare)] = value;
+		reader.readInt("nightmare.Ancient", value);
+		weights.nightmare[static_cast<size_t>(ItemRarityTier::Ancient)] = value;
+		reader.readInt("hell.Common", value);
+		weights.hell[static_cast<size_t>(ItemRarityTier::Common)] = value;
+		reader.readInt("hell.Magic", value);
+		weights.hell[static_cast<size_t>(ItemRarityTier::Magic)] = value;
+		reader.readInt("hell.Rare", value);
+		weights.hell[static_cast<size_t>(ItemRarityTier::Rare)] = value;
+		reader.readInt("hell.Ancient", value);
+		weights.hell[static_cast<size_t>(ItemRarityTier::Ancient)] = value;
+	}
+	ItemRarityWeightsTable.shrink_to_fit();
+}
+
+void LoadItemRarityCurvesDat()
+{
+	constexpr std::string_view filename = "txtdata\\items\\rarity_scaling_curves.tsv";
+	DataFile dataFile = DataFile::loadOrDie(filename);
+	dataFile.skipHeaderOrDie(filename);
+
+	ItemRarityCurves.clear();
+	ItemRarityCurves.reserve(dataFile.numRecords());
+	for (DataFileRecord record : dataFile) {
+		RecordReader reader { record, filename };
+		ItemRarityCurve &curve = ItemRarityCurves.emplace_back();
+		reader.read("tier", curve.tier, ParseItemRarityTier);
+		int value = 0;
+		reader.readInt("minAffixes", value);
+		curve.minAffixes = value;
+		reader.readInt("maxAffixes", value);
+		curve.maxAffixes = value;
+		reader.readInt("minBudgetPermille", value);
+		curve.minBudgetPermille = value;
+		reader.readInt("maxBudgetPermille", value);
+		curve.maxBudgetPermille = value;
+		reader.readInt("progressionScalingPermille", value);
+		curve.progressionScalingPermille = value;
+		reader.readInt("deterministicVariancePermille", value);
+		curve.deterministicVariancePermille = value;
+	}
+	ItemRarityCurves.shrink_to_fit();
+}
+
 } // namespace
 
 void LoadItemData()
@@ -711,6 +796,8 @@ void LoadItemData()
 	LoadUniqueItemDat();
 	LoadItemAffixesDat("txtdata\\items\\item_prefixes.tsv", ItemPrefixes);
 	LoadItemAffixesDat("txtdata\\items\\item_suffixes.tsv", ItemSuffixes);
+	LoadItemRarityWeightsDat();
+	LoadItemRarityCurvesDat();
 }
 
 std::string_view ItemTypeToString(ItemType itemType)
