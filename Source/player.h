@@ -361,6 +361,8 @@ public:
 	uint8_t pDungMsgs2;
 	bool pOriginalCathedral;
 	uint8_t pDiabloKillLevel;
+	uint8_t pNephilimLevel;
+	uint32_t pNephilimExperience;
 	uint16_t wReflections;
 	ItemSpecialEffectHf pDamAcFlags;
 
