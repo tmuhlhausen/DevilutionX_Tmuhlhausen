@@ -41,7 +41,7 @@
 namespace devilution {
 
 namespace {
-constexpr uint8_t PackedPlayerSaveRevision = 1;
+constexpr uint8_t PackedPlayerSaveRevision = 2;
 
 void EventFailedJoinAttempt(const char *playerName)
 {
@@ -202,6 +202,10 @@ void PackPlayer(PlayerPack &packed, const Player &player)
 	packed.pSaveRevision = PackedPlayerSaveRevision;
 	packed.pNephilimLevel = player.pNephilimLevel;
 	packed.pNephilimExperience = Swap32LE(player.pNephilimExperience);
+	packed.pGuildId = Swap32LE(player.guildMemberState.guildId.value);
+	packed.pGuildRole = static_cast<uint8_t>(player.guildMemberState.role);
+	packed.pGuildPermissions = Swap32LE(player.guildMemberState.permissions);
+	packed.pGuildInviteState = player.guildMemberState.invited ? 1 : 0;
 	packed.bIsHellfire = gbIsHellfire ? 1 : 0;
 }
 
@@ -440,6 +444,14 @@ void UnPackPlayer(const PlayerPack &packed, Player &player)
 	player.pDiabloKillLevel = Swap32LE(packed.pDiabloKillLevel);
 	player.pNephilimLevel = packed.pSaveRevision >= PackedPlayerSaveRevision ? packed.pNephilimLevel : 0;
 	player.pNephilimExperience = packed.pSaveRevision >= PackedPlayerSaveRevision ? Swap32LE(packed.pNephilimExperience) : 0;
+	if (packed.pSaveRevision >= PackedPlayerSaveRevision) {
+		player.guildMemberState.guildId.value = Swap32LE(packed.pGuildId);
+		player.guildMemberState.role = static_cast<MemberRole>(packed.pGuildRole);
+		player.guildMemberState.permissions = Swap32LE(packed.pGuildPermissions);
+		player.guildMemberState.invited = packed.pGuildInviteState != 0;
+	} else {
+		player.guildMemberState = {};
+	}
 }
 
 bool UnPackNetItem(const Player &player, const ItemNetPack &packedItem, Item &item)
