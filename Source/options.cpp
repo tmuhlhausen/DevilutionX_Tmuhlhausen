@@ -797,6 +797,8 @@ GraphicsOptions::GraphicsOptions()
     , hardwareCursorMaxSize("Hardware Cursor Maximum Size", OptionEntryFlags::CantChangeInGame | OptionEntryFlags::RecreateUI | (HardwareCursorSupported() ? OptionEntryFlags::None : OptionEntryFlags::Invisible), N_("Hardware Cursor Maximum Size"), N_("Maximum width / height for the hardware cursor. Larger cursors fall back to software."), 128, { 0, 64, 128, 256, 512 })
 #endif
     , showFPS("Show FPS", OptionEntryFlags::None, N_("Show FPS"), N_("Displays the FPS in the upper left corner of the screen."), false)
+    , renderGraph("Render Graph", OptionEntryFlags::CantChangeInGame | OptionEntryFlags::Invisible, N_("Render Graph"), N_("Enable the experimental render-graph frame pipeline."), false)
+    , gpuDriven("GPU Driven", OptionEntryFlags::CantChangeInGame | OptionEntryFlags::Invisible, N_("GPU Driven"), N_("Enable the experimental GPU-driven rendering path."), false)
 {
 }
 std::vector<OptionEntryBase *> GraphicsOptions::GetEntries()
@@ -819,6 +821,8 @@ std::vector<OptionEntryBase *> GraphicsOptions::GetEntries()
 		&brightness,
 		&zoom,
 		&showFPS,
+		&renderGraph,
+		&gpuDriven,
 		&perPixelLighting,
 		&colorCycling,
 		&alternateNestArt,
@@ -946,12 +950,23 @@ std::vector<OptionEntryBase *> ControllerOptions::GetEntries()
 NetworkOptions::NetworkOptions()
     : OptionCategoryBase("Network", N_("Network"), N_("Network Settings"))
     , port("Port", OptionEntryFlags::Invisible, "Port", "What network port to use.", 6112)
+    , transport("Transport", OptionEntryFlags::Invisible | OptionEntryFlags::CantChangeInMultiPlayer, N_("Transport"), N_("Select the network transport backend."), NetTransport::Udp,
+          {
+              { NetTransport::Udp, N_("UDP") },
+              { NetTransport::Quic, N_("QUIC (Experimental)") },
+              { NetTransport::Simulation, N_("Simulation Loopback") },
+          })
+    , novaTransport("NOVA Transport", OptionEntryFlags::Invisible | OptionEntryFlags::CantChangeInMultiPlayer, N_("NOVA Transport"), N_("Enable the NOVA transport feature pipeline."), false)
+    , rollback("Rollback Netcode", OptionEntryFlags::Invisible | OptionEntryFlags::CantChangeInMultiPlayer, N_("Rollback Netcode"), N_("Enable rollback and prediction pipeline hooks."), false)
 {
 }
 std::vector<OptionEntryBase *> NetworkOptions::GetEntries()
 {
 	return {
 		&port,
+		&transport,
+		&novaTransport,
+		&rollback,
 	};
 }
 

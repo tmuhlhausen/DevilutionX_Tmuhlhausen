@@ -1020,6 +1020,11 @@ extern "C" void SdlLogToFile(void *userdata, int /*category*/, SDL_LogPriority p
 	PrintHelpOption("-n", _(/* TRANSLATORS: Commandline Option */ "Skip startup videos"));
 	PrintHelpOption("-f", _(/* TRANSLATORS: Commandline Option */ "Display frames per second"));
 	PrintHelpOption("--verbose", _(/* TRANSLATORS: Commandline Option */ "Enable verbose logging"));
+	PrintHelpOption("--net-transport <udp|quic|sim>", _(/* TRANSLATORS: Commandline Option */ "Select network transport backend"));
+	PrintHelpOption("--net-nova-transport", _(/* TRANSLATORS: Commandline Option */ "Enable experimental NOVA transport pipeline"));
+	PrintHelpOption("--net-rollback", _(/* TRANSLATORS: Commandline Option */ "Enable experimental rollback/prediction networking"));
+	PrintHelpOption("--gfx-render-graph", _(/* TRANSLATORS: Commandline Option */ "Enable experimental render graph pipeline"));
+	PrintHelpOption("--gfx-gpu-driven", _(/* TRANSLATORS: Commandline Option */ "Enable experimental GPU-driven rendering"));
 #if SDL_VERSION_ATLEAST(2, 0, 0)
 	PrintHelpOption("--log-to-file <path>", _(/* TRANSLATORS: Commandline Option */ "Log to a file instead of stderr"));
 #endif
@@ -1059,6 +1064,23 @@ void PrintFlagMessage(std::string_view flag, std::string_view message)
 void PrintFlagRequiresArgument(std::string_view flag)
 {
 	PrintFlagMessage(flag, " requires an argument");
+}
+
+bool ParseNetTransport(std::string_view value, NetTransport &transport)
+{
+	if (value == "udp") {
+		transport = NetTransport::Udp;
+		return true;
+	}
+	if (value == "quic") {
+		transport = NetTransport::Quic;
+		return true;
+	}
+	if (value == "sim") {
+		transport = NetTransport::Simulation;
+		return true;
+	}
+	return false;
 }
 
 void DiabloParseFlags(int argc, char **argv)
@@ -1155,6 +1177,25 @@ void DiabloParseFlags(int argc, char **argv)
 			gbVanilla = true;
 		} else if (arg == "--verbose") {
 			SDL_SetLogPriorities(SDL_LOG_PRIORITY_VERBOSE);
+		} else if (arg == "--net-transport") {
+			if (i + 1 == argc) {
+				PrintFlagRequiresArgument("--net-transport");
+				diablo_quit(64);
+			}
+			NetTransport transport = NetTransport::Udp;
+			if (!ParseNetTransport(argv[++i], transport)) {
+				PrintFlagMessage("--net-transport", " must be one of: udp, quic, sim");
+				diablo_quit(64);
+			}
+			GetOptions().Network.transport.SetValue(transport);
+		} else if (arg == "--net-nova-transport") {
+			GetOptions().Network.novaTransport.SetValue(true);
+		} else if (arg == "--net-rollback") {
+			GetOptions().Network.rollback.SetValue(true);
+		} else if (arg == "--gfx-render-graph") {
+			GetOptions().Graphics.renderGraph.SetValue(true);
+		} else if (arg == "--gfx-gpu-driven") {
+			GetOptions().Graphics.gpuDriven.SetValue(true);
 #if SDL_VERSION_ATLEAST(2, 0, 0)
 		} else if (arg == "--log-to-file") {
 			if (i + 1 == argc) {

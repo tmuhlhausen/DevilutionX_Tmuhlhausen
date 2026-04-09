@@ -89,6 +89,12 @@ enum class Resampler : uint8_t {
 #endif
 };
 
+enum class NetTransport : uint8_t {
+	Udp = 0,
+	Quic = 1,
+	Simulation = 2,
+};
+
 std::string_view ResamplerToString(Resampler resampler);
 std::optional<Resampler> ResamplerFromString(std::string_view resampler);
 
@@ -553,6 +559,10 @@ struct GraphicsOptions : OptionCategoryBase {
 #endif
 	/** @brief Show FPS, even without the -f command line flag. */
 	OptionEntryBoolean showFPS;
+	/** @brief Enable the experimental render-graph pipeline. */
+	OptionEntryBoolean renderGraph;
+	/** @brief Enable the experimental GPU-driven rendering pipeline. */
+	OptionEntryBoolean gpuDriven;
 };
 
 struct GameplayOptions : OptionCategoryBase {
@@ -684,6 +694,12 @@ struct NetworkOptions : OptionCategoryBase {
 	char szPreviousHost[129];
 	/** @brief What network port to use. */
 	OptionEntryInt<uint16_t> port;
+	/** @brief Select active network transport backend. */
+	OptionEntryEnum<NetTransport> transport;
+	/** @brief Enable the experimental NOVA transport path. */
+	OptionEntryBoolean novaTransport;
+	/** @brief Enable the experimental rollback networking path. */
+	OptionEntryBoolean rollback;
 };
 
 struct ChatOptions : OptionCategoryBase {

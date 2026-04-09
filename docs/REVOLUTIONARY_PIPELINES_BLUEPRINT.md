@@ -17,11 +17,11 @@
 ## 1) Networking Pipeline Rework (NOVA-NET)
 
 ### 1.1 Transport Abstraction (Additive)
-- [ ] Introduce a transport interface (`INetTransport`) with adapters for:
+- [x] Introduce a transport interface (`INetTransport`) with adapters for:
   - [ ] UDP (baseline)
   - [ ] QUIC (reliable streams + datagrams)
   - [ ] Local loopback simulation mode
-- [ ] Add runtime transport selection (`--net-transport=udp|quic|sim`).
+- [x] Add runtime transport selection (`--net-transport=udp|quic|sim`).
 
 ### 1.2 Tick-Accurate Deterministic Core
 - [ ] Introduce fixed-step simulation boundary (`SimTick`) decoupled from render FPS.
@@ -65,7 +65,7 @@
 - [ ] Automatic barrier/sync generation per backend.
 
 ### 2.2 Multi-Backend Modernization
-- [ ] Define backend-agnostic RHI interface (`IRenderBackend`).
+- [x] Define backend-agnostic RHI interface (`IRenderBackend`).
 - [ ] Keep current backend as compatibility path.
 - [ ] Add staged support for modern API path (e.g., Vulkan/Metal/DX12-like model).
 
@@ -135,8 +135,8 @@
 ---
 
 ## 6) Immediate Next Actions (Highest ROI)
-- [ ] Draft `INetTransport` and `IRenderBackend` interface headers.
-- [ ] Add feature-flag config plumbing and startup parsing.
+- [x] Draft `INetTransport` and `IRenderBackend` interface headers.
+- [x] Add feature-flag config plumbing and startup parsing.
 - [ ] Add deterministic tick boundary + hash instrumentation.
 - [ ] Implement minimal render graph with 3 passes (world, UI, post).
 - [ ] Create benchmark map + scripted network chaos test.
