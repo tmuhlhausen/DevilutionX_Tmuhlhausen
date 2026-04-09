@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <array>
+#include <string>
 #include <string_view>
 
 #include "diablo.h"
@@ -845,18 +846,10 @@ public:
 	}
 
 	[[nodiscard]] uint32_t getNextExperienceThreshold() const;
-	[[nodiscard]] uint16_t getNephilimLevel() const
-	{
-		return _pNephilimLevel;
-	}
-	void setNephilimLevel(uint16_t level);
-	[[nodiscard]] uint16_t getMaxNephilimLevel() const;
-	[[nodiscard]] uint64_t getNephilimExperience() const
-	{
-		return _pNephilimExperience;
-	}
-	void setNephilimExperience(uint64_t experience);
-	[[nodiscard]] uint64_t getNextNephilimThreshold() const;
+	[[nodiscard]] uint16_t getNephilimLevel() const;
+	[[nodiscard]] uint32_t getCurrentNephilimExperienceThreshold() const;
+	[[nodiscard]] uint32_t getNextNephilimExperienceThreshold() const;
+	[[nodiscard]] bool isMaxNephilimLevel() const;
 
 	/** @brief Checks if the player is on the same level as the local player (MyPlayer). */
 	bool isOnActiveLevel() const
@@ -931,6 +924,8 @@ public:
 extern DVL_API_FOR_TEST uint8_t MyPlayerId;
 extern DVL_API_FOR_TEST Player *MyPlayer;
 extern DVL_API_FOR_TEST std::vector<Player> Players;
+
+[[nodiscard]] std::string FormatPlayerLevelText(const Player &player);
 /** @brief What Player items and stats should be displayed? Normally this is identical to MyPlayer but can differ when /inspect was used. */
 extern Player *InspectPlayer;
 /** @brief Do we currently inspect a remote player (/inspect was used)? In this case the (remote) players items and stats can't be modified. */

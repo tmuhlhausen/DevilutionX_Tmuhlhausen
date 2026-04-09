@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <limits>
 
 #ifdef USE_SDL3
 #include <SDL3/SDL_events.h>
@@ -69,6 +70,38 @@ Player *InspectPlayer;
 bool MyPlayerIsDead;
 
 namespace {
+
+uint32_t GetNephilimExperienceStep()
+{
+	const uint8_t maxCharacterLevel = GetMaximumCharacterLevel();
+	if (maxCharacterLevel <= 1)
+		return 1;
+
+	const uint32_t maxLevelThreshold = GetNextExperienceThresholdForLevel(maxCharacterLevel);
+	const uint32_t prevLevelThreshold = GetNextExperienceThresholdForLevel(maxCharacterLevel - 1);
+	return std::max<uint32_t>(1, maxLevelThreshold - prevLevelThreshold);
+}
+
+uint32_t GetCurrentNephilimExperienceThreshold(uint32_t experience)
+{
+	const uint32_t maxLevelThreshold = GetNextExperienceThresholdForLevel(GetMaximumCharacterLevel());
+	if (experience <= maxLevelThreshold)
+		return maxLevelThreshold;
+
+	const uint32_t nephilimExperience = experience - maxLevelThreshold;
+	const uint32_t nephilimStep = GetNephilimExperienceStep();
+	const uint32_t nephilimLevel = nephilimExperience / nephilimStep;
+	return maxLevelThreshold + nephilimLevel * nephilimStep;
+}
+
+uint32_t GetNextNephilimExperienceThreshold(uint32_t experience)
+{
+	const uint32_t currentThreshold = GetCurrentNephilimExperienceThreshold(experience);
+	const uint32_t nephilimStep = GetNephilimExperienceStep();
+	return currentThreshold > std::numeric_limits<uint32_t>::max() - nephilimStep
+	    ? std::numeric_limits<uint32_t>::max()
+	    : currentThreshold + nephilimStep;
+}
 
 struct DirectionSettings {
 	Direction dir;
@@ -1532,6 +1565,14 @@ void GetPlayerGraphicsPath(std::string_view path, std::string_view prefix, std::
 
 } // namespace
 
+std::string FormatPlayerLevelText(const Player &player)
+{
+	if (player.getNephilimLevel() == 0)
+		return fmt::format(fmt::runtime(_("level {:d}")), player.getCharacterLevel());
+
+	return fmt::format(fmt::runtime(_("level {:d}, Nephilim {:d}")), player.getCharacterLevel(), player.getNephilimLevel());
+}
+
 void Player::CalcScrolls()
 {
 	_pScrlSpells = 0;
@@ -2001,25 +2042,29 @@ uint32_t Player::getNextExperienceThreshold() const
 	return GetNextExperienceThresholdForLevel(this->getCharacterLevel());
 }
 
-void Player::setNephilimLevel(uint16_t level)
+uint16_t Player::getNephilimLevel() const
 {
-	_pNephilimLevel = std::clamp<uint16_t>(level, 0U, getMaxNephilimLevel());
+	const uint32_t maxLevelThreshold = GetNextExperienceThresholdForLevel(getMaxCharacterLevel());
+	if (_pExperience <= maxLevelThreshold)
+		return 0;
+
+	const uint32_t nephilimStep = GetNephilimExperienceStep();
+	return static_cast<uint16_t>((_pExperience - maxLevelThreshold) / nephilimStep + 1);
 }
 
-uint16_t Player::getMaxNephilimLevel() const
+uint32_t Player::getCurrentNephilimExperienceThreshold() const
 {
-	return GetMaximumNephilimLevel();
+	return GetCurrentNephilimExperienceThreshold(_pExperience);
 }
 
-void Player::setNephilimExperience(uint64_t experience)
+uint32_t Player::getNextNephilimExperienceThreshold() const
 {
-	const uint64_t maxExperience = GetNextNephilimThresholdForLevel(getMaxNephilimLevel());
-	_pNephilimExperience = std::min(experience, maxExperience);
+	return GetNextNephilimExperienceThreshold(_pExperience);
 }
 
-uint64_t Player::getNextNephilimThreshold() const
+bool Player::isMaxNephilimLevel() const
 {
-	return GetNextNephilimThresholdForLevel(getNephilimLevel() + 1);
+	return _pExperience >= std::numeric_limits<uint32_t>::max();
 }
 
 int32_t Player::calculateBaseLife() const
@@ -2451,39 +2496,6 @@ void Player::_addExperience(uint32_t experience, int levelDelta)
 	if (this != MyPlayer || hasNoLife())
 		return;
 
-	// Keep classic progression untouched, except route experience into Nephilim progression once level 99 is reached.
-	if (getCharacterLevel() == 99) {
-		if (getNephilimLevel() >= getMaxNephilimLevel()) {
-			return;
-		}
-
-		uint32_t clampedExp = static_cast<uint32_t>(std::clamp<int64_t>(static_cast<int64_t>(experience * (1 + levelDelta / 10.0)), 0, std::numeric_limits<uint32_t>::max()));
-
-		if (gbIsMultiplayer) {
-			clampedExp = std::min<uint32_t>({ clampedExp, /* level 1-5: */ getNextExperienceThreshold() / 20U, /* level 6-50: */ 200U * getCharacterLevel() });
-		}
-
-		lua::OnPlayerGainExperience(this, clampedExp);
-
-		const uint64_t maxNephilimExperience = GetNextNephilimThresholdForLevel(getMaxNephilimLevel());
-		_pNephilimExperience += std::min<uint64_t>(clampedExp, maxNephilimExperience - _pNephilimExperience);
-
-		while (getNephilimLevel() < getMaxNephilimLevel() && _pNephilimExperience >= getNextNephilimThreshold()) {
-			setNephilimLevel(getNephilimLevel() + 1);
-		}
-
-		if (*GetOptions().Gameplay.experienceBar) {
-			RedrawEverything();
-		}
-
-		NetSendCmdParam1(false, CMD_PLRLEVEL, getCharacterLevel());
-		return;
-	}
-
-	if (isMaxCharacterLevel()) {
-		return;
-	}
-
 	// Adjust xp based on difference between the players current level and the target level (usually a monster level)
 	uint32_t clampedExp = static_cast<uint32_t>(std::clamp<int64_t>(static_cast<int64_t>(experience * (1 + levelDelta / 10.0)), 0, std::numeric_limits<uint32_t>::max()));
 
@@ -2496,10 +2508,8 @@ void Player::_addExperience(uint32_t experience, int levelDelta)
 
 	lua::OnPlayerGainExperience(this, clampedExp);
 
-	const uint32_t maxExperience = GetNextExperienceThresholdForLevel(getMaxCharacterLevel());
-
-	// ensure we only add enough experience to reach the max experience cap so we don't overflow
-	_pExperience += std::min(clampedExp, maxExperience - _pExperience);
+	// ensure we only add enough experience to stay in a valid uint32_t range
+	_pExperience += std::min(clampedExp, std::numeric_limits<uint32_t>::max() - _pExperience);
 
 	if (*GetOptions().Gameplay.experienceBar) {
 		RedrawEverything();

@@ -90,21 +90,29 @@ void DrawXPBar(const Surface &out)
 
 	RenderClxSprite(out, (*xpbarArt)[0], back);
 
-	if (player.isMaxCharacterLevel()) {
-		// Draw a nice golden bar for max level characters.
+	uint64_t prevXp = 0;
+	uint64_t nextXp = 0;
+	const bool useNephilimProgression = player.isMaxCharacterLevel() && !player.isMaxNephilimLevel();
+
+	if (useNephilimProgression) {
+		prevXp = player.getCurrentNephilimExperienceThreshold();
+		nextXp = player.getNextNephilimExperienceThreshold();
+	} else if (player.isMaxCharacterLevel()) {
+		// Draw a nice golden bar for capped characters.
 		DrawBar(out, position, BarWidth, GoldGradient);
 
 		return;
+	} else {
+		const uint8_t charLevel = player.getCharacterLevel();
+		prevXp = GetNextExperienceThresholdForLevel(charLevel - 1);
+		nextXp = GetNextExperienceThresholdForLevel(charLevel);
 	}
 
-	const uint8_t charLevel = player.getCharacterLevel();
-
-	const uint64_t prevXp = GetNextExperienceThresholdForLevel(charLevel - 1);
-	if (player._pExperience < prevXp)
+	if (player._pExperience < prevXp || nextXp <= prevXp)
 		return;
 
 	const uint64_t prevXpDelta1 = player._pExperience - prevXp;
-	const uint64_t prevXpDelta = GetNextExperienceThresholdForLevel(charLevel) - prevXp;
+	const uint64_t prevXpDelta = nextXp - prevXp;
 	const uint64_t fullBar = BarWidth * prevXpDelta1 / prevXpDelta;
 
 	// Figure out how much to fill the last pixel of the XP bar, to make it gradually appear with gained XP
@@ -137,20 +145,24 @@ bool CheckXPBarInfo()
 	const uint8_t charLevel = player.getCharacterLevel();
 
 	AddInfoBoxString(fmt::format(fmt::runtime(_("Level {:d}")), charLevel));
+	AddInfoBoxString(fmt::format(fmt::runtime(_("Nephilim {:d}")), player.getNephilimLevel()));
+
+	InfoColor = player.isMaxCharacterLevel() ? UiFlags::ColorWhitegold : UiFlags::ColorWhite;
+
+	AddInfoBoxString(fmt::format(fmt::runtime(_("Experience: {:s}")), FormatInteger(player._pExperience)));
 
 	if (player.isMaxCharacterLevel()) {
-		// Show a maximum level indicator for max level players.
-		InfoColor = UiFlags::ColorWhitegold;
+		if (player.isMaxNephilimLevel()) {
+			AddInfoBoxString(_("Maximum Nephilim Level"));
+			return true;
+		}
 
-		AddInfoBoxString(fmt::format(fmt::runtime(_("Experience: {:s}")), FormatInteger(player._pExperience)));
-		AddInfoBoxString(_("Maximum Level"));
-
+		const uint32_t nextNephilimThreshold = player.getNextNephilimExperienceThreshold();
+		AddInfoBoxString(fmt::format(fmt::runtime(_("Next Nephilim: {:s}")), FormatInteger(nextNephilimThreshold)));
+		AddInfoBoxString(fmt::format(fmt::runtime(_("{:s} to Nephilim {:d}")), FormatInteger(nextNephilimThreshold - player._pExperience), player.getNephilimLevel() + 1));
 		return true;
 	}
 
-	InfoColor = UiFlags::ColorWhite;
-
-	AddInfoBoxString(fmt::format(fmt::runtime(_("Experience: {:s}")), FormatInteger(player._pExperience)));
 	const uint32_t nextExperienceThreshold = player.getNextExperienceThreshold();
 	AddInfoBoxString(fmt::format(fmt::runtime(_("Next Level: {:s}")), FormatInteger(nextExperienceThreshold)));
 	AddInfoBoxString(fmt::format(fmt::runtime(_("{:s} to Level {:d}")), FormatInteger(nextExperienceThreshold - player._pExperience), charLevel + 1));
