@@ -53,6 +53,7 @@ namespace {
 
 constexpr size_t MaxMissilesForSaveGame = 125;
 constexpr size_t PlayerWalkPathSizeForSaveGame = 25;
+constexpr uint8_t PlayerSaveFormatRevision = 1;
 
 uint8_t giNumberQuests;
 uint8_t giNumberOfSmithPremiumItems;
@@ -635,7 +636,17 @@ void LoadPlayer(LoadHelper &file, Player &player)
 	player.pDiabloKillLevel = file.NextLE<uint32_t>();
 	sgGameInitInfo.nDifficulty = static_cast<_difficulty>(file.NextLE<uint32_t>());
 	player.pDamAcFlags = static_cast<ItemSpecialEffectHf>(file.NextLE<uint32_t>());
-	file.Skip(20); // Available bytes
+	const uint8_t playerSaveRevision = file.NextLE<uint8_t>();
+	if (playerSaveRevision >= PlayerSaveFormatRevision) {
+		player.pNephilimLevel = file.NextLE<uint8_t>();
+		file.Skip(2); // Alignment
+		player.pNephilimExperience = file.NextLE<uint32_t>();
+	} else {
+		player.pNephilimLevel = 0;
+		player.pNephilimExperience = 0;
+		file.Skip(7); // Legacy/unused bytes
+	}
+	file.Skip(12); // Available bytes
 	CalcPlrInv(player, false);
 
 	player.executedSpell = player.queuedSpell; // Ensures backwards compatibility
@@ -1485,7 +1496,11 @@ void SavePlayer(SaveHelper &file, const Player &player)
 	file.WriteLE<uint32_t>(player.pDiabloKillLevel);
 	file.WriteLE<uint32_t>(sgGameInitInfo.nDifficulty);
 	file.WriteLE<uint32_t>(static_cast<uint32_t>(player.pDamAcFlags));
-	file.Skip(20); // Available bytes
+	file.WriteLE<uint8_t>(PlayerSaveFormatRevision);
+	file.WriteLE<uint8_t>(player.pNephilimLevel);
+	file.Skip(2); // Alignment
+	file.WriteLE<uint32_t>(player.pNephilimExperience);
+	file.Skip(12); // Available bytes
 
 	// Omit pointer _pNData
 	// Omit pointer _pWData

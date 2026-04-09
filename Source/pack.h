@@ -78,7 +78,11 @@ struct PlayerPack {
 	uint32_t pDiabloKillLevel;
 	uint32_t pDifficulty;
 	uint32_t pDamAcFlags;  // `ItemSpecialEffectHf` is 1 byte but this is 4 bytes.
-	uint8_t reserved3[20]; // For future use
+	uint8_t pSaveRevision;
+	uint8_t pNephilimLevel;
+	uint16_t reserved3;
+	uint32_t pNephilimExperience;
+	uint8_t reserved4[11]; // For future use
 };
 
 union ItemNetPack {
@@ -115,6 +119,8 @@ struct PlayerNetPack {
 	uint8_t pManaShield;
 	uint16_t wReflections;
 	uint8_t pDiabloKillLevel;
+	uint8_t pNephilimLevel;
+	uint32_t pNephilimExperience;
 	uint8_t friendlyMode;
 	uint8_t isOnSetLevel;
 

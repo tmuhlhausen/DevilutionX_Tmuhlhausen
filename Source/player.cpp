@@ -1450,8 +1450,10 @@ void ValidatePlayer()
 
 	// Player::setCharacterLevel ensures that the player level is within the expected range in case someone has edited their character level in memory
 	myPlayer.setCharacterLevel(myPlayer.getCharacterLevel());
+	myPlayer.setNephilimLevel(myPlayer.getNephilimLevel());
+	myPlayer.setNephilimExperience(myPlayer.getNephilimExperience());
 	// This lets us catch cases where someone is editing experience directly through memory modification and reset their experience back to the expected cap.
-	if (!myPlayer.isMaxCharacterLevel() && myPlayer._pExperience > myPlayer.getNextExperienceThreshold()) {
+	if (myPlayer._pExperience > myPlayer.getNextExperienceThreshold()) {
 		myPlayer._pExperience = myPlayer.getNextExperienceThreshold();
 		if (*GetOptions().Gameplay.experienceBar) {
 			RedrawEverything();

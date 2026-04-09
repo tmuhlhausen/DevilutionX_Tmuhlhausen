@@ -68,6 +68,41 @@ public:
 	}
 } ExperienceData;
 
+class NephilimExperienceData {
+	/** Specifies the Nephilim experience point limit of each Nephilim level. */
+	std::vector<uint64_t> levelThresholds;
+
+public:
+	[[nodiscard]] uint16_t getMaxLevel() const
+	{
+		return static_cast<uint16_t>(std::min<size_t>(levelThresholds.size(), std::numeric_limits<uint16_t>::max()));
+	}
+
+	DVL_REINITIALIZES void clear()
+	{
+		levelThresholds.clear();
+	}
+
+	[[nodiscard]] uint64_t getThresholdForLevel(unsigned level) const
+	{
+		if (level > 0)
+			return levelThresholds[std::min<unsigned>(level - 1, getMaxLevel())];
+
+		return 0;
+	}
+
+	void setThresholdForLevel(unsigned level, uint64_t experience)
+	{
+		if (level > 0) {
+			if (level > levelThresholds.size()) {
+				levelThresholds.resize(level, std::numeric_limits<uint64_t>::max());
+			}
+
+			levelThresholds[static_cast<size_t>(level - 1)] = experience;
+		}
+	}
+} NephilimExperienceData;
+
 enum class ExperienceColumn {
 	Level,
 	Experience,
@@ -153,6 +188,77 @@ void ReloadExperienceData()
 
 		if (!skipRecord)
 			ExperienceData.setThresholdForLevel(level, experience);
+	}
+}
+
+void ReloadNephilimExperienceData()
+{
+	constexpr std::string_view filename = "txtdata\\NephilimExperience.tsv";
+	auto dataFileResult = DataFile::load(filename);
+	if (!dataFileResult.has_value()) {
+		DataFile::reportFatalError(dataFileResult.error(), filename);
+	}
+	DataFile &dataFile = dataFileResult.value();
+
+	constexpr unsigned ExpectedColumnCount = enum_size<ExperienceColumn>::value;
+
+	std::array<ColumnDefinition, ExpectedColumnCount> columns;
+	auto parseHeaderResult = dataFile.parseHeader<ExperienceColumn>(columns.data(), columns.data() + columns.size(), mapExperienceColumnFromName);
+
+	if (!parseHeaderResult.has_value()) {
+		DataFile::reportFatalError(parseHeaderResult.error(), filename);
+	}
+
+	NephilimExperienceData.clear();
+	for (DataFileRecord record : dataFile) {
+		uint16_t level = 0;
+		uint64_t experience = 0;
+		bool skipRecord = false;
+
+		FieldIterator fieldIt = record.begin();
+		const FieldIterator endField = record.end();
+		for (auto &column : columns) {
+			fieldIt += column.skipLength;
+
+			if (fieldIt == endField) {
+				DataFile::reportFatalError(DataFile::Error::NotEnoughColumns, filename);
+			}
+
+			DataFileField field = *fieldIt;
+
+			switch (static_cast<ExperienceColumn>(column)) {
+			case ExperienceColumn::Level: {
+				auto parseIntResult = field.parseInt(level);
+
+				if (!parseIntResult.has_value()) {
+					if (*field == "MaxLevel") {
+						skipRecord = true;
+					} else {
+						DataFile::reportFatalFieldError(parseIntResult.error(), filename, "Level", field);
+					}
+				}
+			} break;
+
+			case ExperienceColumn::Experience: {
+				auto parseIntResult = field.parseInt(experience);
+
+				if (!parseIntResult.has_value()) {
+					DataFile::reportFatalFieldError(parseIntResult.error(), filename, "Experience", field);
+				}
+			} break;
+
+			default:
+				break;
+			}
+
+			if (skipRecord)
+				break;
+
+			++fieldIt;
+		}
+
+		if (!skipRecord)
+			NephilimExperienceData.setThresholdForLevel(level, experience);
 	}
 }
 
@@ -377,6 +483,7 @@ const ClassAttributes &GetClassAttributes(HeroClass playerClass)
 void LoadPlayerDataFiles()
 {
 	ReloadExperienceData();
+	ReloadNephilimExperienceData();
 	LoadClassDat();
 	LoadClassesAttributes();
 }
@@ -401,6 +508,16 @@ uint32_t GetNextExperienceThresholdForLevel(unsigned level)
 uint8_t GetMaximumCharacterLevel()
 {
 	return ExperienceData.getMaxLevel();
+}
+
+uint64_t GetNextNephilimThresholdForLevel(unsigned level)
+{
+	return NephilimExperienceData.getThresholdForLevel(level);
+}
+
+uint16_t GetMaximumNephilimLevel()
+{
+	return NephilimExperienceData.getMaxLevel();
 }
 
 size_t GetNumPlayerClasses()

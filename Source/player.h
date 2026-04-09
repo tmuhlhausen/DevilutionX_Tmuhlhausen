@@ -256,6 +256,8 @@ struct Player {
 	int _pILMinDam;
 	int _pILMaxDam;
 	uint32_t _pExperience;
+	uint16_t _pNephilimLevel = 0;
+	uint64_t _pNephilimExperience = 0;
 	PLR_MODE _pmode;
 	int8_t walkpath[MaxPathLengthPlayer];
 	bool plractive;
@@ -360,6 +362,8 @@ public:
 	uint8_t pDungMsgs2;
 	bool pOriginalCathedral;
 	uint8_t pDiabloKillLevel;
+	uint8_t pNephilimLevel;
+	uint32_t pNephilimExperience;
 	uint16_t wReflections;
 	ItemSpecialEffectHf pDamAcFlags;
 
