@@ -55,6 +55,7 @@ set(standalone_tests
   file_util_test
   format_int_test
   ini_test
+  net_transport_mode_test
   palette_blending_test
   parse_int_test
   path_test
