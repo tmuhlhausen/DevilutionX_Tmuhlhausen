@@ -109,6 +109,34 @@ enum class ExperienceColumn {
 	LAST = Experience
 };
 
+struct ProgressionCurveEntry {
+	uint16_t minLevel = 1;
+	uint16_t xpGainPercent = 100;
+	uint16_t normalDropRatePermille = 1000;
+	uint16_t nightmareDropRatePermille = 1000;
+	uint16_t hellDropRatePermille = 1000;
+	uint16_t normalAncientChancePermille = 1000;
+	uint16_t nightmareAncientChancePermille = 1000;
+	uint16_t hellAncientChancePermille = 1000;
+};
+
+std::vector<ProgressionCurveEntry> ProgressionCurveData;
+
+const ProgressionCurveEntry &GetProgressionCurveForLevel(unsigned level)
+{
+	static const ProgressionCurveEntry fallbackCurve {};
+	if (ProgressionCurveData.empty())
+		return fallbackCurve;
+
+	const ProgressionCurveEntry *curve = &ProgressionCurveData.front();
+	for (const ProgressionCurveEntry &entry : ProgressionCurveData) {
+		if (entry.minLevel > level)
+			break;
+		curve = &entry;
+	}
+	return *curve;
+}
+
 tl::expected<ExperienceColumn, ColumnDefinition::Error> mapExperienceColumnFromName(std::string_view name)
 {
 	if (name == "Level") {
@@ -259,6 +287,35 @@ void ReloadNephilimExperienceData()
 
 		if (!skipRecord)
 			NephilimExperienceData.setThresholdForLevel(level, experience);
+	}
+}
+
+void ReloadProgressionCurveData()
+{
+	constexpr std::string_view filename = "txtdata\\progression_curves.tsv";
+	DataFile dataFile = DataFile::loadOrDie(filename);
+	dataFile.skipHeaderOrDie(filename);
+
+	ProgressionCurveData.clear();
+	for (DataFileRecord record : dataFile) {
+		ValueReader reader { record, filename };
+		ProgressionCurveEntry &entry = ProgressionCurveData.emplace_back();
+		reader.readInt("MinLevel", entry.minLevel);
+		reader.readInt("XpGainPercent", entry.xpGainPercent);
+		reader.readInt("NormalDropRatePermille", entry.normalDropRatePermille);
+		reader.readInt("NightmareDropRatePermille", entry.nightmareDropRatePermille);
+		reader.readInt("HellDropRatePermille", entry.hellDropRatePermille);
+		reader.readInt("NormalAncientChancePermille", entry.normalAncientChancePermille);
+		reader.readInt("NightmareAncientChancePermille", entry.nightmareAncientChancePermille);
+		reader.readInt("HellAncientChancePermille", entry.hellAncientChancePermille);
+
+		entry.xpGainPercent = std::clamp<uint16_t>(entry.xpGainPercent, 100, 500);
+		entry.normalDropRatePermille = std::clamp<uint16_t>(entry.normalDropRatePermille, 100, 5000);
+		entry.nightmareDropRatePermille = std::clamp<uint16_t>(entry.nightmareDropRatePermille, 100, 5000);
+		entry.hellDropRatePermille = std::clamp<uint16_t>(entry.hellDropRatePermille, 100, 5000);
+		entry.normalAncientChancePermille = std::clamp<uint16_t>(entry.normalAncientChancePermille, 100, 5000);
+		entry.nightmareAncientChancePermille = std::clamp<uint16_t>(entry.nightmareAncientChancePermille, 100, 5000);
+		entry.hellAncientChancePermille = std::clamp<uint16_t>(entry.hellAncientChancePermille, 100, 5000);
 	}
 }
 
@@ -484,6 +541,7 @@ void LoadPlayerDataFiles()
 {
 	ReloadExperienceData();
 	ReloadNephilimExperienceData();
+	ReloadProgressionCurveData();
 	LoadClassDat();
 	LoadClassesAttributes();
 }
@@ -518,6 +576,41 @@ uint64_t GetNextNephilimThresholdForLevel(unsigned level)
 uint16_t GetMaximumNephilimLevel()
 {
 	return NephilimExperienceData.getMaxLevel();
+}
+
+uint16_t GetExperienceGainMultiplierForLevel(unsigned level)
+{
+	return GetProgressionCurveForLevel(level).xpGainPercent;
+}
+
+uint16_t GetDropRateMultiplierForLevel(unsigned level, int difficulty)
+{
+	const ProgressionCurveEntry &curve = GetProgressionCurveForLevel(level);
+	switch (difficulty) {
+	case 0:
+		return curve.normalDropRatePermille;
+	case 1:
+		return curve.nightmareDropRatePermille;
+	case 2:
+		return curve.hellDropRatePermille;
+	default:
+		return 1000;
+	}
+}
+
+uint16_t GetAncientChanceMultiplierForLevel(unsigned level, int difficulty)
+{
+	const ProgressionCurveEntry &curve = GetProgressionCurveForLevel(level);
+	switch (difficulty) {
+	case 0:
+		return curve.normalAncientChancePermille;
+	case 1:
+		return curve.nightmareAncientChancePermille;
+	case 2:
+		return curve.hellAncientChancePermille;
+	default:
+		return 1000;
+	}
 }
 
 size_t GetNumPlayerClasses()
