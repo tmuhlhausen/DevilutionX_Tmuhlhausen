@@ -130,19 +130,34 @@ PanelEntry panelEntries[] = {
 	{ "", { 161, 14 }, 149, 0,
 	    []() { return StyledText { UiFlags::ColorWhite, std::string(InspectPlayer->getClassName()) }; } },
 
-	{ N_("Level"), { 57, 52 }, 57, 45,
-	    []() { return StyledText { UiFlags::ColorWhite, StrCat(InspectPlayer->getCharacterLevel()) }; } },
+	{ N_("Level"), { 57, 52 }, 57, 110,
+	    []() {
+		    return StyledText { UiFlags::ColorWhite, fmt::format(fmt::runtime(_("{:d} / Nephilim {:d}")), InspectPlayer->getCharacterLevel(), InspectPlayer->getNephilimLevel()) };
+	    } },
 	{ N_("Experience"), { TopRightLabelX, 52 }, 99, 91,
 	    []() {
 	        return StyledText { UiFlags::ColorWhite, FormatInteger(InspectPlayer->_pExperience) };
 	    } },
 	{ N_("Next level"), { TopRightLabelX, 80 }, 99, 198,
 	    []() {
-	        if (InspectPlayer->isMaxCharacterLevel()) {
-		        return StyledText { UiFlags::ColorWhitegold, std::string(_("None")) };
-	        }
-	        const uint32_t nextExperienceThreshold = InspectPlayer->getNextExperienceThreshold();
-	        return StyledText { UiFlags::ColorWhite, FormatInteger(nextExperienceThreshold) };
+		    if (InspectPlayer->isMaxCharacterLevel()) {
+			    if (InspectPlayer->isMaxNephilimLevel())
+				    return StyledText { UiFlags::ColorWhitegold, std::string(_("None")) };
+
+			    return StyledText { UiFlags::ColorWhite, FormatInteger(InspectPlayer->getNextNephilimExperienceThreshold()) };
+		    }
+		    const uint32_t nextExperienceThreshold = InspectPlayer->getNextExperienceThreshold();
+		    return StyledText { UiFlags::ColorWhite, FormatInteger(nextExperienceThreshold) };
+	    } },
+	{ N_("Nephilim XP-to-next"), { TopRightLabelX, 108 }, 99, 198,
+	    []() {
+		    if (!InspectPlayer->isMaxCharacterLevel())
+			    return StyledText { UiFlags::ColorWhitegold, std::string(_("Reach max level")) };
+		    if (InspectPlayer->isMaxNephilimLevel())
+			    return StyledText { UiFlags::ColorWhitegold, std::string(_("None")) };
+
+		    const uint32_t nextNephilimThreshold = InspectPlayer->getNextNephilimExperienceThreshold();
+		    return StyledText { UiFlags::ColorWhite, FormatInteger(nextNephilimThreshold - InspectPlayer->_pExperience) };
 	    } },
 
 	{ N_("Base"), { LeftColumnLabelX, /* set dynamically */ 0 }, 0, 44, {} },

@@ -884,7 +884,7 @@ bool NetInit(bool bSinglePlayer)
 	Player &myPlayer = *MyPlayer;
 	// separator for marking messages from a different game
 	AddMessageToChatLog(_("New Game"), nullptr, UiFlags::ColorRed);
-	AddMessageToChatLog(fmt::format(fmt::runtime(_("Player '{:s}' (level {:d}) just joined the game")), myPlayer._pName, myPlayer.getCharacterLevel()));
+	AddMessageToChatLog(fmt::format(fmt::runtime(_("Player '{:s}' ({:s}) just joined the game")), myPlayer._pName, FormatPlayerLevelText(myPlayer)));
 
 	// Log join message with seed for joining players (creator already logged it in SNetCreateGame)
 	if (gbIsMultiplayer && !IsLoopback && MyPlayerId != 0) {
@@ -944,13 +944,13 @@ void recv_plrinfo(Player &player, const TCmdPlrInfoHdr &header, bool recv)
 
 	std::string_view szEvent;
 	if (sgbPlayerTurnBitTbl[pnum]) {
-		szEvent = _("Player '{:s}' (level {:d}) just joined the game");
+		szEvent = _("Player '{:s}' ({:s}) just joined the game");
 		if (!IsLoopback)
-			LogInfo("Player '{}' joined the {} game (level {}, {}/{} players)", player._pName, ConnectionNames[provider], player.getCharacterLevel(), gbActivePlayers, MAX_PLRS);
+			LogInfo("Player '{}' joined the {} game ({}, {}/{} players)", player._pName, ConnectionNames[provider], FormatPlayerLevelText(player), gbActivePlayers, MAX_PLRS);
 	} else {
-		szEvent = _("Player '{:s}' (level {:d}) is already in the game");
+		szEvent = _("Player '{:s}' ({:s}) is already in the game");
 	}
-	EventPlrMsg(fmt::format(fmt::runtime(szEvent), player._pName, player.getCharacterLevel()));
+	EventPlrMsg(fmt::format(fmt::runtime(szEvent), player._pName, FormatPlayerLevelText(player)));
 
 	SyncInitPlr(player);
 

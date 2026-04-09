@@ -2295,7 +2295,7 @@ size_t OnPlayerJoinLevel(const TCmdLocParam2 &message, Player &player)
 		ResetPlayerGFX(player);
 		player.plractive = true;
 		gbActivePlayers++;
-		EventPlrMsg(fmt::format(fmt::runtime(_("Player '{:s}' (level {:d}) just joined the game")), player._pName, player.getCharacterLevel()));
+		EventPlrMsg(fmt::format(fmt::runtime(_("Player '{:s}' ({:s}) just joined the game")), player._pName, FormatPlayerLevelText(player)));
 	}
 
 	if (player.plractive && &player != MyPlayer) {

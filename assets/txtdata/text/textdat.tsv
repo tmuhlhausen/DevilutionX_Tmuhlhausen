@@ -337,3 +337,7 @@ TEXT_RBOOKC	Efficio Obitus Ut Inimicus.	true	Warrior56
 TEXT_BBOOKA	In Spiritu Sanctum.	true	Warrior54
 TEXT_BBOOKB	Praedictum Otium.	true	Warrior55
 TEXT_BBOOKC	Efficio Obitus Ut Inimicus.	true	Warrior56
+TEXT_NEPHILIM_LABEL	Nephilim	true	None
+TEXT_NEPHILIM_XP_TO_NEXT	Nephilim XP-to-next	true	None
+TEXT_MAX_NEPHILIM_LEVEL	Maximum Nephilim Level	true	None
+TEXT_LEVEL_WITH_NEPHILIM	level {:d}, Nephilim {:d}	true	None
