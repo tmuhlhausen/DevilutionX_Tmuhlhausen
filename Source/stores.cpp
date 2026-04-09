@@ -286,7 +286,7 @@ void PrintStoreItem(const Item &item, int l, UiFlags flags, bool cursIndent = fa
 	std::string productLine;
 
 	if (item._iIdentified) {
-		if (item._iMagical != ITEM_QUALITY_UNIQUE) {
+		if (!IsLegendaryQuality(item._iMagical)) {
 			if (item._iPrePower != -1) {
 				productLine.append(PrintItemPower(item._iPrePower, item));
 			}
@@ -489,7 +489,7 @@ void StartSmithSell()
 			sellOk = true;
 			PlayerItems[CurrentItemIndex] = myPlayer.InvList[i];
 
-			if (PlayerItems[CurrentItemIndex]._iMagical != ITEM_QUALITY_NORMAL && PlayerItems[CurrentItemIndex]._iIdentified)
+			if (IsMagicalQuality(PlayerItems[CurrentItemIndex]._iMagical) && PlayerItems[CurrentItemIndex]._iIdentified)
 				PlayerItems[CurrentItemIndex]._ivalue = PlayerItems[CurrentItemIndex]._iIvalue;
 
 			PlayerItems[CurrentItemIndex]._ivalue = std::max(PlayerItems[CurrentItemIndex]._ivalue / 4, 1);
@@ -506,7 +506,7 @@ void StartSmithSell()
 			sellOk = true;
 			PlayerItems[CurrentItemIndex] = myPlayer.SpdList[i];
 
-			if (PlayerItems[CurrentItemIndex]._iMagical != ITEM_QUALITY_NORMAL && PlayerItems[CurrentItemIndex]._iIdentified)
+			if (IsMagicalQuality(PlayerItems[CurrentItemIndex]._iMagical) && PlayerItems[CurrentItemIndex]._iIdentified)
 				PlayerItems[CurrentItemIndex]._ivalue = PlayerItems[CurrentItemIndex]._iIvalue;
 
 			PlayerItems[CurrentItemIndex]._ivalue = std::max(PlayerItems[CurrentItemIndex]._ivalue / 4, 1);
@@ -714,7 +714,7 @@ void StartWitchSell()
 			sellok = true;
 			PlayerItems[CurrentItemIndex] = myPlayer.InvList[i];
 
-			if (PlayerItems[CurrentItemIndex]._iMagical != ITEM_QUALITY_NORMAL && PlayerItems[CurrentItemIndex]._iIdentified)
+			if (IsMagicalQuality(PlayerItems[CurrentItemIndex]._iMagical) && PlayerItems[CurrentItemIndex]._iIdentified)
 				PlayerItems[CurrentItemIndex]._ivalue = PlayerItems[CurrentItemIndex]._iIvalue;
 
 			PlayerItems[CurrentItemIndex]._ivalue = std::max(PlayerItems[CurrentItemIndex]._ivalue / 4, 1);
@@ -731,7 +731,7 @@ void StartWitchSell()
 			sellok = true;
 			PlayerItems[CurrentItemIndex] = myPlayer.SpdList[i];
 
-			if (PlayerItems[CurrentItemIndex]._iMagical != ITEM_QUALITY_NORMAL && PlayerItems[CurrentItemIndex]._iIdentified)
+			if (IsMagicalQuality(PlayerItems[CurrentItemIndex]._iMagical) && PlayerItems[CurrentItemIndex]._iIdentified)
 				PlayerItems[CurrentItemIndex]._ivalue = PlayerItems[CurrentItemIndex]._iIvalue;
 
 			PlayerItems[CurrentItemIndex]._ivalue = std::max(PlayerItems[CurrentItemIndex]._ivalue / 4, 1);
@@ -1016,7 +1016,7 @@ bool IdItemOk(Item *i)
 	if (i->isEmpty()) {
 		return false;
 	}
-	if (i->_iMagical == ITEM_QUALITY_NORMAL) {
+	if (!IsMagicalQuality(i->_iMagical)) {
 		return false;
 	}
 	return !i->_iIdentified;
@@ -1264,7 +1264,7 @@ void SmithEnter()
 void SmithBuyItem(Item &item)
 {
 	TakePlrsMoney(item._iIvalue);
-	if (item._iMagical == ITEM_QUALITY_NORMAL)
+	if (!IsMagicalQuality(item._iMagical))
 		item._iIdentified = false;
 	StoreAutoPlace(item, true);
 	int idx = OldScrollPos + ((OldTextLine - PreviousScrollPos) / 4);
@@ -1305,7 +1305,7 @@ void SmithBuyEnter()
 void SmithBuyPItem(Item &item)
 {
 	TakePlrsMoney(item._iIvalue);
-	if (item._iMagical == ITEM_QUALITY_NORMAL)
+	if (!IsMagicalQuality(item._iMagical))
 		item._iIdentified = false;
 	StoreAutoPlace(item, true);
 
@@ -1665,7 +1665,7 @@ void HealerBuyItem(Item &item)
 	}
 
 	TakePlrsMoney(item._iIvalue);
-	if (item._iMagical == ITEM_QUALITY_NORMAL)
+	if (!IsMagicalQuality(item._iMagical))
 		item._iIdentified = false;
 	StoreAutoPlace(item, true);
 
@@ -2045,7 +2045,7 @@ void AddStoreHoldRepair(Item *itm, int8_t i)
 	PlayerItems[CurrentItemIndex] = *itm;
 
 	const int due = item->_iMaxDur - item->_iDurability;
-	if (item->_iMagical != ITEM_QUALITY_NORMAL && item->_iIdentified) {
+	if (IsMagicalQuality(item->_iMagical) && item->_iIdentified) {
 		v = 30 * item->_iIvalue * due / (item->_iMaxDur * 100 * 2);
 		if (v == 0)
 			return;

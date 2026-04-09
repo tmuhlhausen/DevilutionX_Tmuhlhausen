@@ -119,7 +119,7 @@ bool VendorAcceptsSale()
 int GetSellPrice(const Item &item)
 {
 	int value = item._ivalue;
-	if (item._iMagical != ITEM_QUALITY_NORMAL && item._iIdentified)
+	if (IsMagicalQuality(item._iMagical) && item._iIdentified)
 		value = item._iIvalue;
 	return std::max(value / 4, 1);
 }
@@ -303,7 +303,7 @@ int GetRepairCost(const Item &item)
 		return 0;
 
 	const int due = item._iMaxDur - item._iDurability;
-	if (item._iMagical != ITEM_QUALITY_NORMAL && item._iIdentified) {
+	if (IsMagicalQuality(item._iMagical) && item._iIdentified) {
 		return 30 * item._iIvalue * due / (item._iMaxDur * 100 * 2);
 	} else {
 		return std::max(item._ivalue * due / (item._iMaxDur * 2), 1);

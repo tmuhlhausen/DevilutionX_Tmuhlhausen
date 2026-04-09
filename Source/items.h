@@ -38,10 +38,40 @@ constexpr int MaxBoyValue = 90000;
 constexpr int MaxBoyValueHf = 200000;
 
 enum item_quality : uint8_t {
-	ITEM_QUALITY_NORMAL,
-	ITEM_QUALITY_MAGIC,
-	ITEM_QUALITY_UNIQUE,
+	ITEM_QUALITY_NORMAL = 0,
+	ITEM_QUALITY_MAGIC = 1,
+	ITEM_QUALITY_UNIQUE_LEGACY = 2,
+	ITEM_QUALITY_LEGENDARY = ITEM_QUALITY_UNIQUE_LEGACY,
+	ITEM_QUALITY_UNIQUE = ITEM_QUALITY_LEGENDARY,
+	ITEM_QUALITY_RARE = 3,
+	ITEM_QUALITY_SET = 4,
+	ITEM_QUALITY_ANCIENT = 5,
 };
+
+constexpr item_quality NormalizeItemQuality(uint8_t quality)
+{
+	switch (quality) {
+	case ITEM_QUALITY_NORMAL:
+	case ITEM_QUALITY_MAGIC:
+	case ITEM_QUALITY_UNIQUE_LEGACY:
+	case ITEM_QUALITY_RARE:
+	case ITEM_QUALITY_SET:
+	case ITEM_QUALITY_ANCIENT:
+		return static_cast<item_quality>(quality);
+	default:
+		return ITEM_QUALITY_NORMAL;
+	}
+}
+
+constexpr bool IsMagicalQuality(item_quality quality)
+{
+	return quality != ITEM_QUALITY_NORMAL;
+}
+
+constexpr bool IsLegendaryQuality(item_quality quality)
+{
+	return quality == ITEM_QUALITY_LEGENDARY;
+}
 
 enum _unique_items : int32_t {
 	UITEM_CLEAVER,
@@ -433,8 +463,14 @@ struct Item {
 		switch (_iMagical) {
 		case ITEM_QUALITY_MAGIC:
 			return UiFlags::ColorBlue;
-		case ITEM_QUALITY_UNIQUE:
+		case ITEM_QUALITY_RARE:
+			return UiFlags::ColorYellow;
+		case ITEM_QUALITY_SET:
 			return UiFlags::ColorWhitegold;
+		case ITEM_QUALITY_LEGENDARY:
+			return UiFlags::ColorOrange;
+		case ITEM_QUALITY_ANCIENT:
+			return UiFlags::ColorRed;
 		default:
 			return UiFlags::ColorWhite;
 		}

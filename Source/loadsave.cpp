@@ -285,7 +285,7 @@ struct LevelConversionData {
 	file.Skip(3); // Alignment
 	item._iPostDraw = file.NextBool32();
 	item._iIdentified = file.NextBool32();
-	item._iMagical = static_cast<item_quality>(file.NextLE<int8_t>());
+	item._iMagical = NormalizeItemQuality(file.NextLE<uint8_t>());
 	file.NextBytes(item._iName, ItemNameLength);
 	TerminateUtf8(item._iName, ItemNameLength);
 	file.NextBytes(item._iIName, ItemNameLength);
@@ -326,7 +326,7 @@ struct LevelConversionData {
 	file.Skip(2); // Alignment
 
 	const auto uniqueMappingId = file.NextLE<int32_t>();
-	if (item._iMagical == ITEM_QUALITY_UNIQUE) {
+	if (IsLegendaryQuality(item._iMagical)) {
 		const auto findIt = UniqueItemMappingIdsToIndices.find(uniqueMappingId);
 		if (findIt == UniqueItemMappingIdsToIndices.end()) {
 			return false;
