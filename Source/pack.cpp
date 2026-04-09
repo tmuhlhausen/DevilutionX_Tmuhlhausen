@@ -5,7 +5,9 @@
  */
 #include "pack.h"
 
+#include <algorithm>
 #include <cstdint>
+#include <limits>
 
 #include "engine/random.hpp"
 #include "game_mode.hpp"
@@ -77,6 +79,14 @@ void VerifyGoldSeeds(Player &player)
 			j = -1;
 		}
 	}
+}
+
+uint32_t GetMaximumNephilimExperienceForValidation()
+{
+	const uint16_t maxNephilimLevel = GetMaximumNephilimLevel();
+	if (maxNephilimLevel == 0)
+		return 0;
+	return static_cast<uint32_t>(std::min<uint64_t>(std::numeric_limits<uint32_t>::max(), GetNextNephilimThresholdForLevel(maxNephilimLevel)));
 }
 
 } // namespace
@@ -455,6 +465,9 @@ bool UnPackNetItem(const Player &player, const ItemNetPack &packedItem, Item &it
 
 	const uint16_t creationFlags = Swap16LE(packedItem.item.wCI);
 	const uint32_t dwBuff = Swap16LE(packedItem.item.dwBuff);
+	ValidateField(packedItem.item.bId, (packedItem.item.bId & 0xFC) == 0);
+	ValidateFields(packedItem.item.bDur, packedItem.item.bMDur, packedItem.item.bDur <= packedItem.item.bMDur);
+	ValidateFields(packedItem.item.bCh, packedItem.item.bMCh, packedItem.item.bCh <= packedItem.item.bMCh);
 	if (idx != IDI_GOLD)
 		ValidateField(creationFlags, IsCreationFlagComboValid(creationFlags));
 	if ((creationFlags & CF_TOWN) != 0)
@@ -472,6 +485,8 @@ bool UnPackNetItem(const Player &player, const ItemNetPack &packedItem, Item &it
 
 bool UnPackNetPlayer(const PlayerNetPack &packed, Player &player)
 {
+	const uint32_t previousNephilimExperience = player.pNephilimExperience;
+	const uint8_t previousNephilimLevel = player.pNephilimLevel;
 	CopyUtf8(player._pName, packed.pName, sizeof(player._pName));
 
 	ValidateField(packed.pClass, packed.pClass < GetNumPlayerClasses());
@@ -481,8 +496,17 @@ bool UnPackNetPlayer(const PlayerNetPack &packed, Player &player)
 	ValidateFields(position.x, position.y, InDungeonBounds(position));
 	ValidateField(packed.plrlevel, packed.plrlevel < NUMLEVELS);
 	ValidateField(packed.pLevel, packed.pLevel >= 1 && packed.pLevel <= player.getMaxCharacterLevel());
-	ValidateField(packed.pNephilimLevel, packed.pNephilimLevel <= player.getMaxCharacterLevel());
+	ValidateField(packed.pNephilimLevel, packed.pNephilimLevel <= GetMaximumNephilimLevel());
 	ValidateFields(packed.pLevel, packed.pNephilimLevel, packed.pLevel == player.getMaxCharacterLevel() || packed.pNephilimLevel == 0);
+	const uint32_t nephilimExperience = Swap32LE(packed.pNephilimExperience);
+	ValidateFields(packed.pLevel, nephilimExperience, packed.pLevel == player.getMaxCharacterLevel() || nephilimExperience == 0);
+	ValidateFields(nephilimExperience, GetMaximumNephilimExperienceForValidation(), nephilimExperience <= GetMaximumNephilimExperienceForValidation());
+	if (gbIsMultiplayer && previousNephilimExperience > 0) {
+		const uint32_t maxExpectedNephilimDelta = std::max<uint32_t>(25000U, previousNephilimExperience / 8U + 2000U);
+		ValidateFields(nephilimExperience, previousNephilimExperience, nephilimExperience >= previousNephilimExperience);
+		ValidateFields(nephilimExperience, previousNephilimExperience, nephilimExperience - previousNephilimExperience <= maxExpectedNephilimDelta);
+		ValidateFields(packed.pNephilimLevel, previousNephilimLevel, packed.pNephilimLevel >= previousNephilimLevel);
+	}
 
 	const int32_t baseHpMax = Swap32LE(packed.pMaxHPBase);
 	const int32_t baseHp = Swap32LE(packed.pHPBase);

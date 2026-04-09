@@ -727,7 +727,7 @@ bool GuardianTryFireAt(Missile &missile, Point target)
 		return false;
 
 	const Player &player = Players[missile._misource];
-	int dmg = GenerateRnd(10) + (player.getCharacterLevel() / 2) + 1;
+	int dmg = GenerateRnd(10) + (player.getCombatFormulaLevel() / 2) + 1;
 	dmg = ScaleSpellEffect(dmg, missile._mispllvl);
 
 	const Direction dir = GetDirection(position, target);
@@ -2582,14 +2582,14 @@ void AddRage(Missile &missile, AddMissileParameter &parameter)
 {
 	Player &player = Players[missile._misource];
 
-	if (HasAnyOf(player._pSpellFlags, SpellFlag::RageActive | SpellFlag::RageCooldown) || player._pHitPoints <= player.getCharacterLevel() << 6) {
+	if (HasAnyOf(player._pSpellFlags, SpellFlag::RageActive | SpellFlag::RageCooldown) || player._pHitPoints <= player.getCombatFormulaLevel() << 6) {
 		missile._miDelFlag = true;
 		parameter.spellFizzled = true;
 		return;
 	}
 
-	missile._midam = player.getCharacterLevel() * 6;
-	missile.duration = 245 + (player.getCharacterLevel() * 2);
+	missile._midam = player.getCombatFormulaLevel() * 6;
+	missile.duration = 245 + (player.getCombatFormulaLevel() * 2);
 	missile.var1 = missile.duration;
 
 	player._pSpellFlags |= SpellFlag::RageActive;
