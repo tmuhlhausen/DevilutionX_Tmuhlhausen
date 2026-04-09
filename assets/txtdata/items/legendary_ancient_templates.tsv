@@ -1,0 +1,5 @@
+templateId	tier	minBudgetPermille	maxBudgetPermille	scalingBasePermille	scalingPerLevelPermille
+LEGENDARY_EARLY	Rare	980	1180	1000	12
+LEGENDARY_ENDGAME	Rare	1100	1400	1125	18
+ANCIENT_BASE	Ancient	1300	1650	1250	22
+ANCIENT_NEPHILIM	Ancient	1500	1950	1400	30

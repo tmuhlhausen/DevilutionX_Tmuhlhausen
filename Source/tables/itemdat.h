@@ -627,6 +627,14 @@ enum class ItemRarityTier : uint8_t {
 	Ancient,
 };
 
+enum class GuildActivityType : uint8_t {
+	DungeonClear,
+	BossKill,
+	Bounty,
+	PvPWin,
+	Crafting,
+};
+
 struct ItemPower {
 	item_effect_type type = IPL_INVALID;
 	int param1 = 0;
@@ -674,12 +682,48 @@ struct ItemRarityCurve {
 	int16_t deterministicVariancePermille;
 };
 
+struct SetPieceBonusDefinition {
+	item_effect_type power = IPL_INVALID;
+	int value1 = 0;
+	int value2 = 0;
+};
+
+struct SetDefinition {
+	std::string setId;
+	uint8_t pieces = 0;
+	uint8_t minNephilimLevel = 0;
+	SetPieceBonusDefinition twoPieceBonus;
+	SetPieceBonusDefinition threePieceBonus;
+	SetPieceBonusDefinition fourPieceBonus;
+};
+
+struct LegendaryTemplateDefinition {
+	std::string templateId;
+	ItemRarityTier tier = ItemRarityTier::Magic;
+	int16_t minBudgetPermille = 0;
+	int16_t maxBudgetPermille = 0;
+	int16_t scalingBasePermille = 0;
+	int16_t scalingPerLevelPermille = 0;
+};
+
+struct GuildRewardDefinition {
+	std::string rewardId;
+	GuildActivityType activity = GuildActivityType::DungeonClear;
+	uint16_t milestone = 0;
+	std::string templateId;
+	uint16_t rewardQuantity = 0;
+	uint8_t minGuildLevel = 0;
+};
+
 extern DVL_API_FOR_TEST std::vector<ItemData> AllItemsList;
 extern ankerl::unordered_dense::map<int32_t, int16_t> ItemMappingIdsToIndices;
 extern std::vector<PLStruct> ItemPrefixes;
 extern std::vector<PLStruct> ItemSuffixes;
 extern std::vector<ItemRarityWeights> ItemRarityWeightsTable;
 extern std::vector<ItemRarityCurve> ItemRarityCurves;
+extern std::vector<SetDefinition> ItemSetDefinitions;
+extern std::vector<LegendaryTemplateDefinition> LegendaryTemplateDefinitions;
+extern std::vector<GuildRewardDefinition> GuildRewardDefinitions;
 extern DVL_API_FOR_TEST std::vector<UniqueItem> UniqueItems;
 extern ankerl::unordered_dense::map<int32_t, int32_t> UniqueItemMappingIdsToIndices;
 
