@@ -25,6 +25,27 @@ inline dungeon_type GetArenaLevelType(_setlevels arenaLevel)
 	return index < arenaCount ? DungeonTypeForArena[index] : DTYPE_NONE;
 }
 
+inline dungeon_type GetGuildLevelType(_setlevels guildLevel)
+{
+	switch (guildLevel) {
+	case SL_GUILD_HALL:
+		return DTYPE_CATHEDRAL;
+	case SL_GUILD_MAP:
+		return DTYPE_CATACOMBS;
+	default:
+		return DTYPE_NONE;
+	}
+}
+
+inline dungeon_type GetSetLevelType(_setlevels setLevel)
+{
+	if (IsArenaLevel(setLevel))
+		return GetArenaLevelType(setLevel);
+	if (IsGuildLevel(setLevel))
+		return GetGuildLevelType(setLevel);
+	return DTYPE_NONE;
+}
+
 /**
  * @brief Load a quest map, the given map is specified via the global setlvlnum
  */

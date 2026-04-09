@@ -53,6 +53,7 @@ uint8_t currlevel;
 bool setlevel;
 _setlevels setlvlnum;
 dungeon_type setlvltype;
+uint32_t ActiveGuildId;
 Point ViewPosition;
 uint_fast8_t MicroTileLen;
 int8_t TransVal;

@@ -10,6 +10,8 @@
 #include <cstdint>
 #include <list>
 #include <memory>
+#include <optional>
+#include <string_view>
 
 #ifdef USE_SDL3
 #include <SDL3/SDL_timer.h>
@@ -271,7 +273,10 @@ struct DJunk {
 };
 #pragma pack(pop)
 
-constexpr size_t MaxMultiplayerLevels = NUMLEVELS + SL_LAST;
+constexpr uint8_t GuildMultiplayerBuckets = 32;
+constexpr uint8_t GuildSetLevelsCount = 2;
+constexpr uint8_t GuildMultiplayerBase = NUMLEVELS + SL_LAST + 1;
+constexpr size_t MaxMultiplayerLevels = GuildMultiplayerBase + GuildMultiplayerBuckets * GuildSetLevelsCount;
 constexpr size_t MaxChunks = MaxMultiplayerLevels + 4;
 
 uint32_t sgdwOwnerWait;
@@ -325,6 +330,24 @@ uint8_t GetLevelForMultiplayer(uint8_t level, bool isSetLevel)
 	if (isSetLevel)
 		return level + NUMLEVELS;
 	return level;
+}
+
+std::optional<uint32_t> GetGuildIdFromName(std::string_view name)
+{
+	if (name.size() < 3 || name.front() != '[')
+		return std::nullopt;
+
+	const size_t end = name.find(']');
+	if (end == std::string_view::npos || end <= 1)
+		return std::nullopt;
+
+	const std::string_view guildTag = name.substr(1, end - 1);
+	uint32_t hash = 2166136261u;
+	for (char c : guildTag) {
+		hash ^= static_cast<uint8_t>(c);
+		hash *= 16777619u;
+	}
+	return hash;
 }
 
 /** @brief Gets a delta level. */
@@ -2909,12 +2932,10 @@ void DeltaSaveLevel()
 		if (&player != MyPlayer)
 			ResetPlayerGFX(player);
 	}
-	uint8_t localLevel;
+	uint8_t localLevel = GetLevelForMultiplayer(*MyPlayer);
 	if (setlevel) {
-		localLevel = GetLevelForMultiplayer(static_cast<uint8_t>(setlvlnum), setlevel);
 		MyPlayer->_pSLvlVisited[static_cast<uint8_t>(setlvlnum)] = true;
 	} else {
-		localLevel = GetLevelForMultiplayer(currlevel, setlevel);
 		MyPlayer->_pLvlVisited[currlevel] = true;
 	}
 	DeltaLeaveSync(localLevel);
@@ -2922,6 +2943,18 @@ void DeltaSaveLevel()
 
 uint8_t GetLevelForMultiplayer(const Player &player)
 {
+	if (player.plrIsOnSetLevel) {
+		const _setlevels setLevel = static_cast<_setlevels>(player.plrlevel);
+		if (IsGuildLevel(setLevel)) {
+			const std::optional<uint32_t> guildId = GetGuildIdFromName(player.name());
+			if (!guildId.has_value())
+				return GetLevelForMultiplayer(player.plrlevel, player.plrIsOnSetLevel);
+
+			const uint8_t guildLevelIndex = setLevel == SL_GUILD_MAP ? 1 : 0;
+			const uint8_t guildBucket = guildId.value() % GuildMultiplayerBuckets;
+			return GuildMultiplayerBase + guildBucket + guildLevelIndex * GuildMultiplayerBuckets;
+		}
+	}
 	return GetLevelForMultiplayer(player.plrlevel, player.plrIsOnSetLevel);
 }
 

@@ -1,0 +1,3 @@
+set_level	dungeon_type	map_path	automap_path	instance_scope	entry_fallback
+SL_GUILD_HALL	DTYPE_CATHEDRAL	levels\\l1data\\sklkng2.dun	levels\\l1data\\sklkngt.dun	Guild	DenyIfNoGuild
+SL_GUILD_MAP	DTYPE_CATACOMBS	levels\\l2data\\bonecha1.dun	levels\\l2data\\bonechat.dun	Guild	DenyIfNoGuild
