@@ -7,6 +7,7 @@
 
 #include <cstdint>
 
+#include "guild/guild.hpp"
 #include "inv.h"
 #include "items.h"
 #include "msg.h"
@@ -82,7 +83,11 @@ struct PlayerPack {
 	uint8_t pNephilimLevel;
 	uint16_t reserved3;
 	uint32_t pNephilimExperience;
-	uint8_t reserved4[11]; // For future use
+	uint32_t pGuildId;
+	uint8_t pGuildRole;
+	uint32_t pGuildPermissions;
+	uint8_t pGuildInviteState;
+	uint8_t reserved4; // For future use
 };
 
 union ItemNetPack {

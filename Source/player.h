@@ -21,6 +21,7 @@
 #include "engine/path.h"
 #include "engine/point.hpp"
 #include "game_mode.hpp"
+#include "guild/guild.hpp"
 #include "interfac.h"
 #include "items.h"
 #include "items/validation.h"
@@ -366,6 +367,7 @@ public:
 	uint32_t pNephilimExperience;
 	uint16_t wReflections;
 	ItemSpecialEffectHf pDamAcFlags;
+	GuildMemberState guildMemberState;
 
 	[[nodiscard]] std::string_view name() const
 	{

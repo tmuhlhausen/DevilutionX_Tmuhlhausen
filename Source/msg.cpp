@@ -8,8 +8,10 @@
 #include <climits>
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <list>
 #include <memory>
+#include <string_view>
 
 #ifdef USE_SDL3
 #include <SDL3/SDL_timer.h>
@@ -34,6 +36,7 @@
 #include "engine/random.hpp"
 #include "engine/world_tile.hpp"
 #include "gamemenu.h"
+#include "guild/guild.hpp"
 #include "items/validation.h"
 #include "levels/crypt.h"
 #include "levels/town.h"
@@ -193,6 +196,13 @@ std::string_view CmdIdString(_cmd_id cmd)
 	case CMD_OPENHIVE: return "CMD_OPENHIVE";
 	case CMD_OPENGRAVE: return "CMD_OPENGRAVE";
 	case CMD_SPAWNMONSTER: return "CMD_SPAWNMONSTER";
+	case CMD_GUILD_CREATE: return "CMD_GUILD_CREATE";
+	case CMD_GUILD_INVITE: return "CMD_GUILD_INVITE";
+	case CMD_GUILD_JOIN: return "CMD_GUILD_JOIN";
+	case CMD_GUILD_LEAVE: return "CMD_GUILD_LEAVE";
+	case CMD_GUILD_PROMOTE: return "CMD_GUILD_PROMOTE";
+	case CMD_GUILD_KICK: return "CMD_GUILD_KICK";
+	case CMD_GUILD_STATE: return "CMD_GUILD_STATE";
 	case FAKE_CMD_SETID: return "FAKE_CMD_SETID";
 	case FAKE_CMD_DROPID: return "FAKE_CMD_DROPID";
 	case CMD_INVALID: return "CMD_INVALID";
@@ -2615,6 +2625,137 @@ size_t OnSpawnMonster(const TCmdSpawnMonster &message, const Player &player)
 	return sizeof(message);
 }
 
+void SendGuildStateToPeers(uint8_t playerId)
+{
+	TCmdGuildState state {};
+	const GuildMemberState memberState = GetGuildMemberState(playerId);
+	const GuildHallState hallState = GetGuildHallState();
+
+	state.bCmd = CMD_GUILD_STATE;
+	state.playerId = playerId;
+	state.guildId = Swap32LE(memberState.guildId.value);
+	state.role = static_cast<uint8_t>(memberState.role);
+	state.permissions = Swap32LE(memberState.permissions);
+	state.invited = memberState.invited ? 1 : 0;
+	CopyUtf8(state.guildName, hallState.name.value.data(), sizeof(state.guildName));
+	state.memberCount = hallState.memberCount;
+	state.onlineCount = hallState.onlineCount;
+	state.hallActive = hallState.isActive ? 1 : 0;
+
+	NetSendLoPri(MyPlayerId, reinterpret_cast<std::byte *>(&state), sizeof(state));
+}
+
+void BroadcastGuildState()
+{
+	for (uint8_t playerId = 0; playerId < Players.size(); playerId++)
+		SendGuildStateToPeers(playerId);
+}
+
+size_t OnGuildCreate(const TCmdGuildCreate &message, const Player &player)
+{
+	if (gbBufferMsgs == 1 || MyPlayerId != 0)
+		return sizeof(message);
+	if (IsGuildRateLimited(player.getId(), 0, 5000))
+		return sizeof(message);
+
+	const std::string_view guildName = std::string_view(message.guildName, sizeof(message.guildName)).substr(0, strnlen(message.guildName, sizeof(message.guildName)));
+	if (!CreateGuild(player.getId(), guildName))
+		return sizeof(message);
+
+	BroadcastGuildState();
+	return sizeof(message);
+}
+
+size_t OnGuildInvite(const TCmdGuildAction &message, const Player &player)
+{
+	if (gbBufferMsgs == 1 || MyPlayerId != 0)
+		return sizeof(message);
+	if (IsGuildRateLimited(player.getId(), 1, 1000))
+		return sizeof(message);
+	if (!InviteToGuild(player.getId(), message.targetPlayerId))
+		return sizeof(message);
+
+	BroadcastGuildState();
+	return sizeof(message);
+}
+
+size_t OnGuildJoin(const TCmdGuildAction &message, const Player &player)
+{
+	if (gbBufferMsgs == 1 || MyPlayerId != 0)
+		return sizeof(message);
+	if (message.targetPlayerId != player.getId() || IsGuildRateLimited(player.getId(), 2, 1000))
+		return sizeof(message);
+	if (!JoinGuild(player.getId()))
+		return sizeof(message);
+
+	BroadcastGuildState();
+	return sizeof(message);
+}
+
+size_t OnGuildLeave(const TCmdGuildAction &message, const Player &player)
+{
+	if (gbBufferMsgs == 1 || MyPlayerId != 0)
+		return sizeof(message);
+	if (message.targetPlayerId != player.getId() || IsGuildRateLimited(player.getId(), 3, 1000))
+		return sizeof(message);
+	if (!LeaveGuild(player.getId()))
+		return sizeof(message);
+
+	BroadcastGuildState();
+	return sizeof(message);
+}
+
+size_t OnGuildPromote(const TCmdGuildAction &message, const Player &player)
+{
+	if (gbBufferMsgs == 1 || MyPlayerId != 0)
+		return sizeof(message);
+	if (IsGuildRateLimited(player.getId(), 4, 1000))
+		return sizeof(message);
+	if (!PromoteGuildMember(player.getId(), message.targetPlayerId))
+		return sizeof(message);
+
+	BroadcastGuildState();
+	return sizeof(message);
+}
+
+size_t OnGuildKick(const TCmdGuildAction &message, const Player &player)
+{
+	if (gbBufferMsgs == 1 || MyPlayerId != 0)
+		return sizeof(message);
+	if (IsGuildRateLimited(player.getId(), 5, 1000))
+		return sizeof(message);
+	if (!KickGuildMember(player.getId(), message.targetPlayerId))
+		return sizeof(message);
+
+	BroadcastGuildState();
+	return sizeof(message);
+}
+
+size_t OnGuildState(const TCmdGuildState &message, const Player &)
+{
+	if (gbBufferMsgs == 1)
+		return sizeof(message);
+	if (message.playerId >= Players.size())
+		return sizeof(message);
+
+	SaveGuildMemberState(
+	    message.playerId,
+	    GuildId { Swap32LE(message.guildId) },
+	    static_cast<MemberRole>(message.role),
+	    Swap32LE(message.permissions),
+	    message.invited != 0);
+
+	GuildHallState hallState {};
+	hallState.guildId.value = Swap32LE(message.guildId);
+	CopyUtf8(hallState.name.value.data(), message.guildName, hallState.name.value.size());
+	hallState.memberCount = message.memberCount;
+	hallState.onlineCount = message.onlineCount;
+	hallState.isActive = message.hallActive != 0;
+	ApplyGuildHallSnapshot(hallState);
+
+	return sizeof(message);
+}
+
 template <typename TCmdImpl>
 size_t HandleCmd(size_t (*handler)(const TCmdImpl &, size_t, Player &), Player &player, const TCmd *pCmd, size_t maxCmdSize)
 {
@@ -2791,6 +2932,7 @@ void delta_init()
 	memset(&sgJunk, 0xFF, sizeof(sgJunk));
 	DeltaLevels.clear();
 	LocalLevels.clear();
+	ResetGuildState();
 }
 
 void DeltaClearLevel(uint8_t level)
@@ -3304,6 +3446,73 @@ void NetSendCmdString(uint32_t pmask, const char *pszStr)
 	multi_send_msg_packet(pmask, reinterpret_cast<std::byte *>(&cmd), strlen(cmd.str) + 2);
 }
 
+void NetSendCmdGuildCreate(bool bHiPri, std::string_view guildName)
+{
+	TCmdGuildCreate cmd {};
+	cmd.bCmd = CMD_GUILD_CREATE;
+	CopyUtf8(cmd.guildName, guildName, sizeof(cmd.guildName));
+
+	if (bHiPri)
+		NetSendHiPri(MyPlayerId, reinterpret_cast<std::byte *>(&cmd), sizeof(cmd));
+	else
+		NetSendLoPri(MyPlayerId, reinterpret_cast<std::byte *>(&cmd), sizeof(cmd));
+}
+
+void NetSendCmdGuildInvite(bool bHiPri, uint8_t targetPlayerId)
+{
+	TCmdGuildAction cmd {};
+	cmd.bCmd = CMD_GUILD_INVITE;
+	cmd.targetPlayerId = targetPlayerId;
+	if (bHiPri)
+		NetSendHiPri(MyPlayerId, reinterpret_cast<std::byte *>(&cmd), sizeof(cmd));
+	else
+		NetSendLoPri(MyPlayerId, reinterpret_cast<std::byte *>(&cmd), sizeof(cmd));
+}
+
+void NetSendCmdGuildJoin(bool bHiPri)
+{
+	TCmdGuildAction cmd {};
+	cmd.bCmd = CMD_GUILD_JOIN;
+	cmd.targetPlayerId = MyPlayerId;
+	if (bHiPri)
+		NetSendHiPri(MyPlayerId, reinterpret_cast<std::byte *>(&cmd), sizeof(cmd));
+	else
+		NetSendLoPri(MyPlayerId, reinterpret_cast<std::byte *>(&cmd), sizeof(cmd));
+}
+
+void NetSendCmdGuildLeave(bool bHiPri)
+{
+	TCmdGuildAction cmd {};
+	cmd.bCmd = CMD_GUILD_LEAVE;
+	cmd.targetPlayerId = MyPlayerId;
+	if (bHiPri)
+		NetSendHiPri(MyPlayerId, reinterpret_cast<std::byte *>(&cmd), sizeof(cmd));
+	else
+		NetSendLoPri(MyPlayerId, reinterpret_cast<std::byte *>(&cmd), sizeof(cmd));
+}
+
+void NetSendCmdGuildPromote(bool bHiPri, uint8_t targetPlayerId)
+{
+	TCmdGuildAction cmd {};
+	cmd.bCmd = CMD_GUILD_PROMOTE;
+	cmd.targetPlayerId = targetPlayerId;
+	if (bHiPri)
+		NetSendHiPri(MyPlayerId, reinterpret_cast<std::byte *>(&cmd), sizeof(cmd));
+	else
+		NetSendLoPri(MyPlayerId, reinterpret_cast<std::byte *>(&cmd), sizeof(cmd));
+}
+
+void NetSendCmdGuildKick(bool bHiPri, uint8_t targetPlayerId)
+{
+	TCmdGuildAction cmd {};
+	cmd.bCmd = CMD_GUILD_KICK;
+	cmd.targetPlayerId = targetPlayerId;
+	if (bHiPri)
+		NetSendHiPri(MyPlayerId, reinterpret_cast<std::byte *>(&cmd), sizeof(cmd));
+	else
+		NetSendLoPri(MyPlayerId, reinterpret_cast<std::byte *>(&cmd), sizeof(cmd));
+}
+
 void delta_close_portal(const Player &player)
 {
 	memset(&sgJunk.portal[player.getId()], 0xFF, sizeof(sgJunk.portal[player.getId()]));
@@ -3479,6 +3688,20 @@ size_t ParseCmd(uint8_t pnum, const TCmd *pCmd, size_t maxCmdSize)
 		return OnOpenGrave(*pCmd);
 	case CMD_SPAWNMONSTER:
 		return HandleCmd(OnSpawnMonster, player, pCmd, maxCmdSize);
+	case CMD_GUILD_CREATE:
+		return HandleCmd(OnGuildCreate, player, pCmd, maxCmdSize);
+	case CMD_GUILD_INVITE:
+		return HandleCmd(OnGuildInvite, player, pCmd, maxCmdSize);
+	case CMD_GUILD_JOIN:
+		return HandleCmd(OnGuildJoin, player, pCmd, maxCmdSize);
+	case CMD_GUILD_LEAVE:
+		return HandleCmd(OnGuildLeave, player, pCmd, maxCmdSize);
+	case CMD_GUILD_PROMOTE:
+		return HandleCmd(OnGuildPromote, player, pCmd, maxCmdSize);
+	case CMD_GUILD_KICK:
+		return HandleCmd(OnGuildKick, player, pCmd, maxCmdSize);
+	case CMD_GUILD_STATE:
+		return HandleCmd(OnGuildState, player, pCmd, maxCmdSize);
 	default:
 		break;
 	}
