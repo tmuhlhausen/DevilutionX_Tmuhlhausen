@@ -872,6 +872,12 @@ GameplayOptions::GameplayOptions()
     , numRejuPotionPickup("Rejuvenation Potion Pickup", OptionEntryFlags::None, N_("Rejuvenation Potion Pickup"), N_("Number of Rejuvenation potions to pick up automatically."), 0, { 0, 1, 2, 4, 8, 16 })
     , numFullRejuPotionPickup("Full Rejuvenation Potion Pickup", OptionEntryFlags::None, N_("Full Rejuvenation Potion Pickup"), N_("Number of Full Rejuvenation potions to pick up automatically."), 0, { 0, 1, 2, 4, 8, 16 })
     , visualStoreUI("Visual Store UI", OptionEntryFlags::None, N_("Visual Store UI"), N_("Use visual grid-based store interface instead of text-based menus. Both store and inventory panels open together."), false)
+    , phaseANephilimCore("Phase A - Nephilim Core", OptionEntryFlags::CantChangeInMultiPlayer, N_("Phase A - Nephilim Core"), N_("Enable the Nephilim core implementation (with save/network compatibility gates)."), false)
+    , phaseBRarityDropPipeline("Phase B - Rarity + Drops", OptionEntryFlags::CantChangeInMultiPlayer, N_("Phase B - Rarity + Drops"), N_("Enable the new rarity, drop-pipeline and scaling systems."), false)
+    , phaseCGuildCoreProtocol("Phase C - Guild Core Protocol", OptionEntryFlags::CantChangeInMultiPlayer, N_("Phase C - Guild Core Protocol"), N_("Enable the guild core protocol and membership persistence."), false)
+    , phaseDGuildHallsEndgame("Phase D - Guild Halls + Endgame", OptionEntryFlags::CantChangeInMultiPlayer, N_("Phase D - Guild Halls + Endgame"), N_("Enable guild halls/maps and endgame-loop integration."), false)
+    , phaseEBalanceAntiCheat("Phase E - Balance + Anti-cheat", OptionEntryFlags::CantChangeInMultiPlayer, N_("Phase E - Balance + Anti-cheat"), N_("Enable balancing pass values and anti-cheat hardening paths."), false)
+    , requireDeterministicMultiplayerItemRecreation("Require deterministic MP item recreation", OptionEntryFlags::CantChangeInMultiPlayer, N_("Require deterministic MP item recreation"), N_("Require deterministic multiplayer item recreation checks before enabling new loot systems by default."), true)
     , skipLoadingScreenThresholdMs("Skip loading screen threshold, ms", OptionEntryFlags::Invisible, "", "", 0)
 {
 }
@@ -916,6 +922,12 @@ std::vector<OptionEntryBase *> GameplayOptions::GetEntries()
 		&numFullRejuPotionPickup,
 		&autoPickupInTown,
 		&disableCripplingShrines,
+		&phaseANephilimCore,
+		&phaseBRarityDropPipeline,
+		&phaseCGuildCoreProtocol,
+		&phaseDGuildHallsEndgame,
+		&phaseEBalanceAntiCheat,
+		&requireDeterministicMultiplayerItemRecreation,
 		&grabInput,
 		&pauseOnFocusLoss,
 		&skipLoadingScreenThresholdMs,
