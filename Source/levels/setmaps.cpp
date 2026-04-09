@@ -29,6 +29,8 @@ const char *const QuestLevelNames[] = {
 	N_("Maze"),
 	N_("Poisoned Water Supply"),
 	N_("Archbishop Lazarus' Lair"),
+	N_("Guild Hall"),
+	N_("Guild Battleground"),
 	N_("Church Arena"),
 	N_("Hell Arena"),
 	N_("Circle of Life Arena"),
@@ -107,6 +109,9 @@ void LoadArenaMap(const char *path, Point viewPosition, Point exitTrigger)
 
 void LoadSetMap()
 {
+	if (IsGuildLevel(setlvlnum))
+		setlvltype = GetGuildLevelType(setlvlnum);
+
 	switch (setlvlnum) {
 	case SL_SKELKING:
 		if (Quests[Q_SKELKING]._qactive == QUEST_INIT) {
@@ -149,6 +154,14 @@ void LoadSetMap()
 		SetMapTransparency("levels\\l1data\\vile1.dun");
 		LoadPaletteAndInitBlending("levels\\l1data\\l1_2.pal");
 		AddVileObjs();
+		InitNoTriggers();
+		break;
+	case SL_GUILD_HALL:
+		LoadCustomMap("levels\\l1data\\sklkng2.dun", { 83, 44 });
+		InitNoTriggers();
+		break;
+	case SL_GUILD_MAP:
+		LoadCustomMap("levels\\l2data\\bonecha1.dun", { 70, 40 });
 		InitNoTriggers();
 		break;
 	case SL_ARENA_CHURCH:

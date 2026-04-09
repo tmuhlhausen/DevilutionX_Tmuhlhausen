@@ -7,6 +7,8 @@
 #include <cmath>
 #include <cstdint>
 #include <limits>
+#include <optional>
+#include <string_view>
 
 #ifdef USE_SDL3
 #include <SDL3/SDL_events.h>
@@ -39,6 +41,7 @@
 #include "help.h"
 #include "inv_iterators.hpp"
 #include "levels/tile_properties.hpp"
+#include "levels/setmaps.h"
 #include "levels/trigs.h"
 #include "lighting.h"
 #include "loadsave.h"
@@ -50,6 +53,7 @@
 #include "objects.h"
 #include "options.h"
 #include "player.h"
+#include "plrmsg.h"
 #include "qol/autopickup.h"
 #include "qol/stash.h"
 #include "spells.h"
@@ -70,6 +74,24 @@ Player *InspectPlayer;
 bool MyPlayerIsDead;
 
 namespace {
+
+std::optional<uint32_t> GetGuildIdFromName(std::string_view name)
+{
+	if (name.size() < 3 || name.front() != '[')
+		return std::nullopt;
+
+	const size_t end = name.find(']');
+	if (end == std::string_view::npos || end <= 1)
+		return std::nullopt;
+
+	const std::string_view guildTag = name.substr(1, end - 1);
+	uint32_t hash = 2166136261u;
+	for (char c : guildTag) {
+		hash ^= static_cast<uint8_t>(c);
+		hash *= 16777619u;
+	}
+	return hash;
+}
 
 uint32_t GetNephilimExperienceStep()
 {
@@ -2977,6 +2999,19 @@ StartNewLvl(Player &player, interface_mode fom, int lvl)
 	case WM_DIABSETLVL:
 		if (&player == MyPlayer)
 			setlvlnum = (_setlevels)lvl;
+		if (IsGuildLevel(setlvlnum)) {
+			setlvltype = GetGuildLevelType(setlvlnum);
+			if (&player == MyPlayer) {
+				const std::optional<uint32_t> guildId = GetGuildIdFromName(player.name());
+				if (!guildId.has_value()) {
+					EventPlrMsg(_("Guild state unavailable. Entry denied."));
+					return;
+				}
+				ActiveGuildId = guildId.value();
+			}
+		} else if (&player == MyPlayer) {
+			ActiveGuildId = 0;
+		}
 		player.setLevel(setlvlnum);
 		break;
 	case WM_DIABTWARPUP:

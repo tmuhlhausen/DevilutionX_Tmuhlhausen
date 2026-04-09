@@ -28,8 +28,10 @@ dungeon_type GetQuestLevelType(_setlevels questLevel)
 
 dungeon_type GetSetLevelType(_setlevels setLevel)
 {
-	const bool isArenaLevel = setLevel >= SL_FIRST_ARENA && setLevel <= SL_LAST;
-	return isArenaLevel ? GetArenaLevelType(setLevel) : GetQuestLevelType(setLevel);
+	const dungeon_type knownSetLevelType = devilution::GetSetLevelType(setLevel);
+	if (knownSetLevelType != DTYPE_NONE)
+		return knownSetLevelType;
+	return GetQuestLevelType(setLevel);
 }
 
 } // namespace

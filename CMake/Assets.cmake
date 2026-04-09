@@ -202,6 +202,7 @@ set(devilutionx_assets
   txtdata/classes/warrior/sprites.tsv
   txtdata/classes/warrior/starting_loadout.tsv
   txtdata/classes/classdat.tsv
+  txtdata/levels/guild_levels.tsv
   txtdata/items/item_prefixes.tsv
   txtdata/items/item_suffixes.tsv
   txtdata/items/itemdat.tsv

@@ -37,6 +37,8 @@ enum _setlevels : int8_t {
 	SL_MAZE,
 	SL_POISONWATER,
 	SL_VILEBETRAYER,
+	SL_GUILD_HALL,
+	SL_GUILD_MAP,
 
 	SL_ARENA_CHURCH,
 	SL_ARENA_HELL,
@@ -52,6 +54,17 @@ inline bool IsArenaLevel(_setlevels setLevel)
 	case SL_ARENA_CHURCH:
 	case SL_ARENA_HELL:
 	case SL_ARENA_CIRCLE_OF_LIFE:
+		return true;
+	default:
+		return false;
+	}
+}
+
+inline bool IsGuildLevel(_setlevels setLevel)
+{
+	switch (setLevel) {
+	case SL_GUILD_HALL:
+	case SL_GUILD_MAP:
 		return true;
 	default:
 		return false;
@@ -140,6 +153,8 @@ extern bool setlevel;
 extern _setlevels setlvlnum;
 /** Specifies the dungeon type of the active quest level of the current game. */
 extern dungeon_type setlvltype;
+/** Identifies the active guild instance for guild set-levels (0 = unbound). */
+extern uint32_t ActiveGuildId;
 /** Specifies the player viewpoint X,Y-coordinates of the map. */
 extern DVL_API_FOR_TEST Point ViewPosition;
 extern uint_fast8_t MicroTileLen;

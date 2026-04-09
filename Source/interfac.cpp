@@ -123,6 +123,8 @@ Cutscenes PickCutscene(interface_mode uMsg)
 			return CutLevel2;
 		if (setlvlnum == SL_VILEBETRAYER)
 			return CutPortalRed;
+		if (IsGuildLevel(setlvlnum))
+			return uMsg == WM_DIABSETLVL ? GetCutSceneFromLevelType(setlvltype) : CutTown;
 		if (IsArenaLevel(setlvlnum)) {
 			if (uMsg == WM_DIABSETLVL)
 				return GetCutSceneFromLevelType(setlvltype);
@@ -394,6 +396,7 @@ void DoLoad(interface_mode uMsg)
 		}
 		IncProgress();
 		setlevel = false;
+		ActiveGuildId = 0;
 		FreeGameMem();
 		IncProgress();
 		currlevel = GetMapReturnLevel();
@@ -425,6 +428,7 @@ void DoLoad(interface_mode uMsg)
 		IncProgress();
 		FreeGameMem();
 		setlevel = false;
+		ActiveGuildId = 0;
 		currlevel = myPlayer.plrlevel;
 		leveltype = GetLevelType(currlevel);
 		IncProgress();
@@ -456,6 +460,7 @@ void DoLoad(interface_mode uMsg)
 		IncProgress();
 		FreeGameMem();
 		setlevel = false;
+		ActiveGuildId = 0;
 		currlevel = myPlayer.plrlevel;
 		leveltype = GetLevelType(currlevel);
 		IncProgress();
