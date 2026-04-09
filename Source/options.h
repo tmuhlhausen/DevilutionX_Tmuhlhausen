@@ -637,6 +637,18 @@ struct GameplayOptions : OptionCategoryBase {
 	OptionEntryInt<int> numFullRejuPotionPickup;
 	/** @brief Use visual grid-based store UI instead of text-based menus. */
 	OptionEntryBoolean visualStoreUI;
+	/** @brief Enable the Nephilim core (Phase A). */
+	OptionEntryBoolean phaseANephilimCore;
+	/** @brief Enable the rarity and drop pipeline overhaul (Phase B). */
+	OptionEntryBoolean phaseBRarityDropPipeline;
+	/** @brief Enable the guild core protocol and membership persistence (Phase C). */
+	OptionEntryBoolean phaseCGuildCoreProtocol;
+	/** @brief Enable guild halls/maps and endgame integration (Phase D). */
+	OptionEntryBoolean phaseDGuildHallsEndgame;
+	/** @brief Enable balance pass and anti-cheat hardening (Phase E). */
+	OptionEntryBoolean phaseEBalanceAntiCheat;
+	/** @brief Require deterministic multiplayer item recreation checks before default-on rollout. */
+	OptionEntryBoolean requireDeterministicMultiplayerItemRecreation;
 
 	/**
 	 * @brief If loading takes less than this value, skips displaying the loading screen.

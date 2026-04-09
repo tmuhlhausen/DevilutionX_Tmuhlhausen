@@ -14,6 +14,7 @@ set(libdevilutionx_SRCS
   doom.cpp
   gamemenu.cpp
   gmenu.cpp
+  guild/guild.cpp
   help.cpp
   hwcursor.cpp
   interfac.cpp

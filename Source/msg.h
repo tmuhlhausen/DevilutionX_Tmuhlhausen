@@ -6,9 +6,11 @@
 #pragma once
 
 #include <cstdint>
+#include <string_view>
 
 #include "dvlnet/leaveinfo.hpp"
 #include "engine/point.hpp"
+#include "guild/guild.hpp"
 #include "items.h"
 #include "monster.h"
 #include "objects.h"
@@ -416,6 +418,34 @@ enum _cmd_id : uint8_t {
 	//
 	// body (TCmdSpawnMonster)
 	CMD_SPAWNMONSTER,
+	// Host-authoritative guild creation request.
+	//
+	// body (TCmdGuildCreate)
+	CMD_GUILD_CREATE,
+	// Host-authoritative guild invite request.
+	//
+	// body (TCmdGuildAction)
+	CMD_GUILD_INVITE,
+	// Host-authoritative guild join request.
+	//
+	// body (TCmdGuildAction)
+	CMD_GUILD_JOIN,
+	// Host-authoritative guild leave request.
+	//
+	// body (TCmdGuildAction)
+	CMD_GUILD_LEAVE,
+	// Host-authoritative guild promotion request.
+	//
+	// body (TCmdGuildAction)
+	CMD_GUILD_PROMOTE,
+	// Host-authoritative guild kick request.
+	//
+	// body (TCmdGuildAction)
+	CMD_GUILD_KICK,
+	// Authoritative guild state synchronization.
+	//
+	// body (TCmdGuildState)
+	CMD_GUILD_STATE,
 	// Fake command; set current player for succeeding mega pkt buffer messages.
 	//
 	// body (TFakeCmdPlr)
@@ -513,6 +543,29 @@ struct TCmdSpawnMonster {
 	uint32_t seed;
 	uint8_t golemOwnerPlayerId;
 	uint8_t golemSpellLevel;
+};
+
+struct TCmdGuildCreate {
+	_cmd_id bCmd;
+	char guildName[MaxGuildNameLength];
+};
+
+struct TCmdGuildAction {
+	_cmd_id bCmd;
+	uint8_t targetPlayerId;
+};
+
+struct TCmdGuildState {
+	_cmd_id bCmd;
+	uint8_t playerId;
+	uint32_t guildId;
+	uint8_t role;
+	uint32_t permissions;
+	uint8_t invited;
+	char guildName[MaxGuildNameLength];
+	uint8_t memberCount;
+	uint8_t onlineCount;
+	uint8_t hallActive;
 };
 
 struct TCmdQuest {
@@ -759,6 +812,12 @@ void NetSendCmdChBeltItem(bool bHiPri, int beltIndex);
 void NetSendCmdDamage(bool bHiPri, const Player &player, uint32_t dwDam, DamageType damageType);
 void NetSendCmdMonDmg(bool bHiPri, uint16_t wMon, uint32_t dwDam);
 void NetSendCmdString(uint32_t pmask, const char *pszStr);
+void NetSendCmdGuildCreate(bool bHiPri, std::string_view guildName);
+void NetSendCmdGuildInvite(bool bHiPri, uint8_t targetPlayerId);
+void NetSendCmdGuildJoin(bool bHiPri);
+void NetSendCmdGuildLeave(bool bHiPri);
+void NetSendCmdGuildPromote(bool bHiPri, uint8_t targetPlayerId);
+void NetSendCmdGuildKick(bool bHiPri, uint8_t targetPlayerId);
 void delta_close_portal(const Player &player);
 bool ValidateCmdSize(size_t requiredCmdSize, size_t maxCmdSize, size_t playerId);
 size_t ParseCmd(uint8_t pnum, const TCmd *pCmd, size_t maxCmdSize);

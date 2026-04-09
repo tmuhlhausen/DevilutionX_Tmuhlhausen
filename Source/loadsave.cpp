@@ -53,7 +53,7 @@ namespace {
 
 constexpr size_t MaxMissilesForSaveGame = 125;
 constexpr size_t PlayerWalkPathSizeForSaveGame = 25;
-constexpr uint8_t PlayerSaveFormatRevision = 1;
+constexpr uint8_t PlayerSaveFormatRevision = 2;
 
 uint8_t giNumberQuests;
 uint8_t giNumberOfSmithPremiumItems;
@@ -641,12 +641,23 @@ void LoadPlayer(LoadHelper &file, Player &player)
 		player.pNephilimLevel = file.NextLE<uint8_t>();
 		file.Skip(2); // Alignment
 		player.pNephilimExperience = file.NextLE<uint32_t>();
+		player.guildMemberState.guildId.value = file.NextLE<uint32_t>();
+		player.guildMemberState.role = static_cast<MemberRole>(file.NextLE<uint8_t>());
+		player.guildMemberState.permissions = file.NextLE<uint32_t>();
+		player.guildMemberState.invited = file.NextLE<uint8_t>() != 0;
+		file.Skip(2); // Available bytes
+	} else if (playerSaveRevision >= 1) {
+		player.pNephilimLevel = file.NextLE<uint8_t>();
+		file.Skip(2); // Alignment
+		player.pNephilimExperience = file.NextLE<uint32_t>();
+		player.guildMemberState = {};
+		file.Skip(12); // Available bytes
 	} else {
 		player.pNephilimLevel = 0;
 		player.pNephilimExperience = 0;
-		file.Skip(7); // Legacy/unused bytes
+		player.guildMemberState = {};
+		file.Skip(19); // Legacy/unused bytes
 	}
-	file.Skip(12); // Available bytes
 	CalcPlrInv(player, false);
 
 	player.executedSpell = player.queuedSpell; // Ensures backwards compatibility
@@ -1500,7 +1511,11 @@ void SavePlayer(SaveHelper &file, const Player &player)
 	file.WriteLE<uint8_t>(player.pNephilimLevel);
 	file.Skip(2); // Alignment
 	file.WriteLE<uint32_t>(player.pNephilimExperience);
-	file.Skip(12); // Available bytes
+	file.WriteLE<uint32_t>(player.guildMemberState.guildId.value);
+	file.WriteLE<uint8_t>(static_cast<uint8_t>(player.guildMemberState.role));
+	file.WriteLE<uint32_t>(player.guildMemberState.permissions);
+	file.WriteLE<uint8_t>(player.guildMemberState.invited ? 1 : 0);
+	file.Skip(2); // Available bytes
 
 	// Omit pointer _pNData
 	// Omit pointer _pWData

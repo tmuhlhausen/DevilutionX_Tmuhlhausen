@@ -21,6 +21,7 @@
 #include "engine/path.h"
 #include "engine/point.hpp"
 #include "game_mode.hpp"
+#include "guild/guild.hpp"
 #include "interfac.h"
 #include "items.h"
 #include "items/validation.h"
@@ -366,6 +367,7 @@ public:
 	uint32_t pNephilimExperience;
 	uint16_t wReflections;
 	ItemSpecialEffectHf pDamAcFlags;
+	GuildMemberState guildMemberState;
 
 	[[nodiscard]] std::string_view name() const
 	{
@@ -577,7 +579,7 @@ public:
 	 */
 	int GetMeleeToHit() const
 	{
-		return getCharacterLevel() + _pDexterity / 2 + _pIBonusToHit + getPlayerCombatData().baseMeleeToHit;
+		return getCombatFormulaLevel() + _pDexterity / 2 + _pIBonusToHit + getPlayerCombatData().baseMeleeToHit;
 	}
 
 	/**
@@ -597,7 +599,7 @@ public:
 	 */
 	int GetRangedToHit() const
 	{
-		return getCharacterLevel() + _pDexterity + _pIBonusToHit + getPlayerCombatData().baseRangedToHit;
+		return getCombatFormulaLevel() + _pDexterity + _pIBonusToHit + getPlayerCombatData().baseRangedToHit;
 	}
 
 	int GetRangedPiercingToHit() const
@@ -625,7 +627,7 @@ public:
 	{
 		int blkper = _pDexterity + getBaseToBlock();
 		if (useLevel)
-			blkper += getCharacterLevel() * 2;
+			blkper += getCombatFormulaLevel() * 2;
 		return blkper;
 	}
 
@@ -806,6 +808,10 @@ public:
 	[[nodiscard]] uint8_t getCharacterLevel() const
 	{
 		return _pLevel;
+	}
+	[[nodiscard]] uint8_t getCombatFormulaLevel() const
+	{
+		return std::min<uint8_t>(getCharacterLevel(), 200);
 	}
 
 	/**

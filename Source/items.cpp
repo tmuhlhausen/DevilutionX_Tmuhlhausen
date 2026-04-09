@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -1127,8 +1128,14 @@ ItemRarityTier RollRarityTier(int level)
 		break;
 	}
 
+	std::array<uint16_t, 4> adjustedWeights = *difficultyWeights;
+	const uint16_t ancientChanceMultiplier = GetAncientChanceMultiplierForLevel(std::max(level, 1), sgGameInitInfo.nDifficulty);
+	adjustedWeights[static_cast<size_t>(ItemRarityTier::Ancient)] = static_cast<uint16_t>(std::min<uint32_t>(
+	    std::numeric_limits<uint16_t>::max(),
+	    std::max<uint32_t>(1U, static_cast<uint32_t>(adjustedWeights[static_cast<size_t>(ItemRarityTier::Ancient)]) * ancientChanceMultiplier / 1000U)));
+
 	uint32_t totalWeight = 0;
-	for (uint16_t weight : *difficultyWeights) {
+	for (uint16_t weight : adjustedWeights) {
 		totalWeight += weight;
 	}
 	if (totalWeight == 0)
@@ -1136,8 +1143,8 @@ ItemRarityTier RollRarityTier(int level)
 
 	const uint32_t roll = static_cast<uint32_t>(GenerateRnd(static_cast<int32_t>(totalWeight)));
 	uint32_t cursor = 0;
-	for (size_t i = 0; i < difficultyWeights->size(); ++i) {
-		cursor += (*difficultyWeights)[i];
+	for (size_t i = 0; i < adjustedWeights.size(); ++i) {
+		cursor += adjustedWeights[i];
 		if (roll < cursor)
 			return static_cast<ItemRarityTier>(i);
 	}
@@ -1487,6 +1494,8 @@ _item_indexes GetItemIndexForDroppableItem(bool considerDropRate, tl::function_r
 	static std::vector<WeightedItemIndex> ril;
 	ril.clear();
 
+	const int progressionLevel = std::max(1, currlevel * 2);
+	const uint16_t dropRateMultiplier = GetDropRateMultiplierForLevel(progressionLevel, sgGameInitInfo.nDifficulty);
 	unsigned cumulativeWeight = 0;
 	for (size_t i = 0; i < AllItemsList.size(); i++) {
 		if (!IsItemAvailable(static_cast<int>(i)))
@@ -1498,7 +1507,8 @@ _item_indexes GetItemIndexForDroppableItem(bool considerDropRate, tl::function_r
 			continue;
 		if (!isItemOkay(item))
 			continue;
-		cumulativeWeight += considerDropRate ? item.dropRate : 1;
+		const uint32_t dropWeight = considerDropRate ? std::max<uint32_t>(1U, static_cast<uint32_t>(item.dropRate) * dropRateMultiplier / 1000U) : 1U;
+		cumulativeWeight += dropWeight;
 		ril.push_back({ static_cast<_item_indexes>(i), cumulativeWeight });
 	}
 	const auto targetWeight = static_cast<unsigned>(RandomIntLessThan(static_cast<int>(cumulativeWeight)));

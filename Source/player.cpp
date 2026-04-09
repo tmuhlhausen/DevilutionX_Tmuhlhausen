@@ -2520,6 +2520,8 @@ void Player::_addExperience(uint32_t experience, int levelDelta)
 
 	// Adjust xp based on difference between the players current level and the target level (usually a monster level)
 	uint32_t clampedExp = static_cast<uint32_t>(std::clamp<int64_t>(static_cast<int64_t>(experience * (1 + levelDelta / 10.0)), 0, std::numeric_limits<uint32_t>::max()));
+	const uint16_t xpGainMultiplier = GetExperienceGainMultiplierForLevel(getCharacterLevel());
+	clampedExp = static_cast<uint32_t>(std::min<uint64_t>(std::numeric_limits<uint32_t>::max(), static_cast<uint64_t>(clampedExp) * xpGainMultiplier / 100U));
 
 	// Prevent power leveling
 	if (gbIsMultiplayer) {
@@ -2530,8 +2532,13 @@ void Player::_addExperience(uint32_t experience, int levelDelta)
 
 	lua::OnPlayerGainExperience(this, clampedExp);
 
+	const uint32_t previousExperience = _pExperience;
 	// ensure we only add enough experience to stay in a valid uint32_t range
 	_pExperience += std::min(clampedExp, std::numeric_limits<uint32_t>::max() - _pExperience);
+	if (gbIsMultiplayer && (_pExperience < previousExperience || _pExperience - previousExperience > std::max<uint32_t>(50000U, previousExperience / 10U))) {
+		LogWarn("Progression anomaly detected for '{}': previousXP={} delta={} newXP={} level={} multiplier={}%",
+		    _pName, previousExperience, _pExperience - previousExperience, _pExperience, getCharacterLevel(), xpGainMultiplier);
+	}
 
 	if (*GetOptions().Gameplay.experienceBar) {
 		RedrawEverything();
