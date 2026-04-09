@@ -1138,8 +1138,17 @@ void InvDrawSlotBack(const Surface &out, Point targetPosition, Size size, item_q
 	case ITEM_QUALITY_MAGIC:
 		colorShift = PAL16_GRAY - (!IsInspectingPlayer() ? PAL16_BLUE : PAL16_ORANGE) - 1;
 		break;
-	case ITEM_QUALITY_UNIQUE:
+	case ITEM_QUALITY_RARE:
 		colorShift = PAL16_GRAY - (!IsInspectingPlayer() ? PAL16_YELLOW : PAL16_ORANGE) - 1;
+		break;
+	case ITEM_QUALITY_SET:
+		colorShift = PAL16_GRAY - (!IsInspectingPlayer() ? PAL16_BEIGE : PAL16_ORANGE) - 1;
+		break;
+	case ITEM_QUALITY_LEGENDARY:
+		colorShift = PAL16_GRAY - (!IsInspectingPlayer() ? PAL16_ORANGE : PAL16_ORANGE) - 1;
+		break;
+	case ITEM_QUALITY_ANCIENT:
+		colorShift = PAL16_GRAY - (!IsInspectingPlayer() ? PAL16_RED : PAL16_ORANGE) - 1;
 		break;
 	default:
 		colorShift = PAL16_GRAY - (!IsInspectingPlayer() ? PAL16_BEIGE : PAL16_ORANGE) - 1;

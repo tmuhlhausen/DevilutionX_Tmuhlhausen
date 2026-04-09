@@ -1468,7 +1468,7 @@ void GetUniqueItem(const Player &player, Item &item, _unique_items uid)
 		item._iSeed = uid;
 
 	item._iUid = uid;
-	item._iMagical = ITEM_QUALITY_UNIQUE;
+	item._iMagical = ITEM_QUALITY_LEGENDARY;
 	item._iCreateInfo |= CF_UNIQUE;
 }
 
@@ -2229,7 +2229,7 @@ StringOrView GetTranslatedItemName(const Item &item)
 			return _(OilNames[i]);
 		}
 		app_fatal("unknown oil");
-	} else if (item._itype == ItemType::Staff && item._iSpell != SpellID::Null && item._iMagical != ITEM_QUALITY_UNIQUE) {
+	} else if (item._itype == ItemType::Staff && item._iSpell != SpellID::Null && !IsLegendaryQuality(item._iMagical)) {
 		return GenerateStaffName(baseItemData, item._iSpell, true);
 	} else {
 		return _(baseItemData.iName);
@@ -2406,12 +2406,20 @@ uint8_t GetOutlineColor(const Item &item, bool checkReq)
 		return ICOL_RED;
 	if (item._itype == ItemType::Gold)
 		return ICOL_YELLOW;
-	if (item._iMagical == ITEM_QUALITY_MAGIC)
+	switch (item._iMagical) {
+	case ITEM_QUALITY_MAGIC:
 		return ICOL_BLUE;
-	if (item._iMagical == ITEM_QUALITY_UNIQUE)
+	case ITEM_QUALITY_RARE:
 		return ICOL_YELLOW;
-
-	return ICOL_WHITE;
+	case ITEM_QUALITY_SET:
+		return ICOL_WHITE;
+	case ITEM_QUALITY_LEGENDARY:
+		return ICOL_YELLOW;
+	case ITEM_QUALITY_ANCIENT:
+		return ICOL_RED;
+	default:
+		return ICOL_WHITE;
+	}
 }
 
 void ClearUniqueItemFlags()
@@ -2714,13 +2722,13 @@ PlayerArmorGraphic GetPlrAnimArmorId(Player &player)
 		switch (chestItem._itype) {
 		case ItemType::HeavyArmor:
 			if (player._pClass == HeroClass::Monk) {
-				if (chestItem._iMagical == ITEM_QUALITY_UNIQUE)
+				if (IsLegendaryQuality(chestItem._iMagical))
 					player._pIAC += playerLevel / 2;
 			}
 			return PlayerArmorGraphic::Heavy;
 		case ItemType::MediumArmor:
 			if (player._pClass == HeroClass::Monk) {
-				if (chestItem._iMagical == ITEM_QUALITY_UNIQUE)
+				if (IsLegendaryQuality(chestItem._iMagical))
 					player._pIAC += playerLevel * 2;
 				else
 					player._pIAC += playerLevel / 2;
@@ -3283,7 +3291,7 @@ void SetupAllItems(const Player &player, Item &item, _item_indexes idx, uint32_t
 				GetUniqueItem(player, item, uid);
 			}
 		}
-		if (item._iMagical != ITEM_QUALITY_UNIQUE)
+		if (!IsLegendaryQuality(item._iMagical))
 			ItemRndDur(item);
 	} else {
 		if (item._iLoc != ILOC_UNEQUIPABLE) {
@@ -3335,7 +3343,7 @@ void TryRandomUniqueItem(Item &item, _item_indexes idx, int8_t mLevel, int uper,
 			item = {}; // Reset item data
 			item.position = itemPos;
 			SetupAllItems(*MyPlayer, item, idx, itemGenerator.advanceRndSeed(), mLevel, uper, onlygood, pregen);
-		} while (item._iMagical == ITEM_QUALITY_UNIQUE);
+		} while (IsLegendaryQuality(item._iMagical));
 
 		return;
 	}
@@ -4141,7 +4149,7 @@ void PrintItemDetails(const Item &item)
 	if (item._iSufPower != -1) {
 		AddItemInfoBoxString(PrintItemPower(item._iSufPower, item));
 	}
-	if (item._iMagical == ITEM_QUALITY_UNIQUE) {
+	if (IsLegendaryQuality(item._iMagical)) {
 		AddItemInfoBoxString(_("unique item"));
 		ShowUniqueItemInfoBox = true;
 		curruitem = item;
@@ -4169,7 +4177,7 @@ void PrintItemDur(const Item &item)
 		if (item._iMiscId == IMISC_STAFF && item._iMaxCharges > 0) {
 			AddItemInfoBoxString(fmt::format(fmt::runtime(_("Charges: {:d}/{:d}")), item._iCharges, item._iMaxCharges));
 		}
-		if (item._iMagical != ITEM_QUALITY_NORMAL)
+		if (IsMagicalQuality(item._iMagical))
 			AddItemInfoBoxString(_("Not Identified"));
 	}
 	if (item._iClass == ICLASS_ARMOR) {
@@ -4177,7 +4185,7 @@ void PrintItemDur(const Item &item)
 			AddItemInfoBoxString(fmt::format(fmt::runtime(_("armor: {:d}  Indestructible")), item._iAC));
 		else
 			AddItemInfoBoxString(fmt::format(fmt::runtime(_("armor: {:d}  Dur: {:d}/{:d}")), item._iAC, item._iDurability, item._iMaxDur));
-		if (item._iMagical != ITEM_QUALITY_NORMAL)
+		if (IsMagicalQuality(item._iMagical))
 			AddItemInfoBoxString(_("Not Identified"));
 		if (item._iMiscId == IMISC_STAFF && item._iMaxCharges > 0) {
 			AddItemInfoBoxString(fmt::format(fmt::runtime(_("Charges: {:d}/{:d}")), item._iCharges, item._iMaxCharges));
@@ -4835,7 +4843,7 @@ StringOrView Item::getName() const
 	if (!_iIdentified || _iCreateInfo == 0 || _iMagical == ITEM_QUALITY_NORMAL) {
 		return GetTranslatedItemName(*this);
 	}
-	if (_iMagical == ITEM_QUALITY_UNIQUE) {
+	if (IsLegendaryQuality(_iMagical)) {
 		return _(UniqueItems[_iUid].UIName);
 	}
 	return GetTranslatedItemNameMagical(*this, dwBuff & CF_HELLFIRE, true, std::nullopt);
