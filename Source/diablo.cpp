@@ -5,6 +5,7 @@
  */
 #include <array>
 #include <cstdint>
+#include <optional>
 #include <string_view>
 
 #ifdef USE_SDL3
@@ -41,6 +42,7 @@
 #include "diablo.h"
 #include "diablo_msg.hpp"
 #include "discord/discord.h"
+#include "dvlnet/net_transport_mode.hpp"
 #include "doom.h"
 #include "encrypt.h"
 #include "engine/backbuffer_state.hpp"
@@ -1066,23 +1068,6 @@ void PrintFlagRequiresArgument(std::string_view flag)
 	PrintFlagMessage(flag, " requires an argument");
 }
 
-bool ParseNetTransport(std::string_view value, NetTransport &transport)
-{
-	if (value == "udp") {
-		transport = NetTransport::Udp;
-		return true;
-	}
-	if (value == "quic") {
-		transport = NetTransport::Quic;
-		return true;
-	}
-	if (value == "sim") {
-		transport = NetTransport::Simulation;
-		return true;
-	}
-	return false;
-}
-
 void DiabloParseFlags(int argc, char **argv)
 {
 #ifdef _DEBUG
@@ -1182,12 +1167,12 @@ void DiabloParseFlags(int argc, char **argv)
 				PrintFlagRequiresArgument("--net-transport");
 				diablo_quit(64);
 			}
-			NetTransport transport = NetTransport::Udp;
-			if (!ParseNetTransport(argv[++i], transport)) {
+			const std::optional<NetTransport> transport = ParseNetTransportMode(argv[++i]);
+			if (!transport.has_value()) {
 				PrintFlagMessage("--net-transport", " must be one of: udp, quic, sim");
 				diablo_quit(64);
 			}
-			GetOptions().Network.transport.SetValue(transport);
+			GetOptions().Network.transport.SetValue(*transport);
 		} else if (arg == "--net-nova-transport") {
 			GetOptions().Network.novaTransport.SetValue(true);
 		} else if (arg == "--net-rollback") {

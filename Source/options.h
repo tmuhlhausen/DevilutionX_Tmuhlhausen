@@ -27,6 +27,7 @@
 
 #include "appfat.h"
 #include "controls/controller_buttons.h"
+#include "dvlnet/net_transport_mode.hpp"
 #include "engine/size.hpp"
 #include "engine/sound_defs.hpp"
 #include "pack.h"
@@ -87,12 +88,6 @@ enum class Resampler : uint8_t {
 #ifdef DVL_AULIB_SUPPORTS_SDL_RESAMPLER
 	SDL,
 #endif
-};
-
-enum class NetTransport : uint8_t {
-	Udp = 0,
-	Quic = 1,
-	Simulation = 2,
 };
 
 std::string_view ResamplerToString(Resampler resampler);
