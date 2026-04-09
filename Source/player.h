@@ -255,6 +255,8 @@ struct Player {
 	int _pILMinDam;
 	int _pILMaxDam;
 	uint32_t _pExperience;
+	uint16_t _pNephilimLevel = 0;
+	uint64_t _pNephilimExperience = 0;
 	PLR_MODE _pmode;
 	int8_t walkpath[MaxPathLengthPlayer];
 	bool plractive;
@@ -841,6 +843,18 @@ public:
 	}
 
 	[[nodiscard]] uint32_t getNextExperienceThreshold() const;
+	[[nodiscard]] uint16_t getNephilimLevel() const
+	{
+		return _pNephilimLevel;
+	}
+	void setNephilimLevel(uint16_t level);
+	[[nodiscard]] uint16_t getMaxNephilimLevel() const;
+	[[nodiscard]] uint64_t getNephilimExperience() const
+	{
+		return _pNephilimExperience;
+	}
+	void setNephilimExperience(uint64_t experience);
+	[[nodiscard]] uint64_t getNextNephilimThreshold() const;
 
 	/** @brief Checks if the player is on the same level as the local player (MyPlayer). */
 	bool isOnActiveLevel() const

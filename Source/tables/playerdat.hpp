@@ -221,6 +221,8 @@ void LoadPlayerDataFiles();
 SfxID GetHeroSound(HeroClass clazz, HeroSpeech speech);
 uint32_t GetNextExperienceThresholdForLevel(unsigned level);
 uint8_t GetMaximumCharacterLevel();
+uint64_t GetNextNephilimThresholdForLevel(unsigned level);
+uint16_t GetMaximumNephilimLevel();
 size_t GetNumPlayerClasses();
 const PlayerData &GetPlayerDataForClass(HeroClass clazz);
 const PlayerCombatData &GetPlayerCombatDataForClass(HeroClass clazz);
