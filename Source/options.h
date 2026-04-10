@@ -27,6 +27,7 @@
 
 #include "appfat.h"
 #include "controls/controller_buttons.h"
+#include "dvlnet/net_transport_mode.hpp"
 #include "engine/size.hpp"
 #include "engine/sound_defs.hpp"
 #include "pack.h"
@@ -553,6 +554,10 @@ struct GraphicsOptions : OptionCategoryBase {
 #endif
 	/** @brief Show FPS, even without the -f command line flag. */
 	OptionEntryBoolean showFPS;
+	/** @brief Enable the experimental render-graph pipeline. */
+	OptionEntryBoolean renderGraph;
+	/** @brief Enable the experimental GPU-driven rendering pipeline. */
+	OptionEntryBoolean gpuDriven;
 };
 
 struct GameplayOptions : OptionCategoryBase {
@@ -684,6 +689,12 @@ struct NetworkOptions : OptionCategoryBase {
 	char szPreviousHost[129];
 	/** @brief What network port to use. */
 	OptionEntryInt<uint16_t> port;
+	/** @brief Select active network transport backend. */
+	OptionEntryEnum<NetTransport> transport;
+	/** @brief Enable the experimental NOVA transport path. */
+	OptionEntryBoolean novaTransport;
+	/** @brief Enable the experimental rollback networking path. */
+	OptionEntryBoolean rollback;
 };
 
 struct ChatOptions : OptionCategoryBase {
