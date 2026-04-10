@@ -16,6 +16,7 @@
 #include "objects.h"
 #include "portal.h"
 #include "quests.h"
+#include "raid/raid.hpp"
 
 namespace devilution {
 
@@ -446,6 +447,42 @@ enum _cmd_id : uint8_t {
 	//
 	// body (TCmdGuildState)
 	CMD_GUILD_STATE,
+	// Host-authoritative raid creation request.
+	//
+	// body (TCmdRaidAction)
+	CMD_RAID_CREATE,
+	// Host-authoritative raid invite request.
+	//
+	// body (TCmdRaidAction)
+	CMD_RAID_INVITE,
+	// Host-authoritative raid join request.
+	//
+	// body (TCmdRaidAction)
+	CMD_RAID_JOIN,
+	// Host-authoritative raid leave request.
+	//
+	// body (TCmdRaidAction)
+	CMD_RAID_LEAVE,
+	// Host-authoritative ready toggle request.
+	//
+	// body (TCmdRaidAction)
+	CMD_RAID_READY_TOGGLE,
+	// Host-authoritative raid start request.
+	//
+	// body (TCmdRaidAction)
+	CMD_RAID_START,
+	// Authoritative raid encounter event synchronization.
+	//
+	// body (TCmdRaidEvent)
+	CMD_RAID_EVENT,
+	// Authoritative raid checkpoint synchronization.
+	//
+	// body (TCmdRaidEvent)
+	CMD_RAID_CHECKPOINT,
+	// Authoritative raid state snapshot synchronization.
+	//
+	// body (TCmdRaidState)
+	CMD_RAID_STATE_SYNC,
 	// Fake command; set current player for succeeding mega pkt buffer messages.
 	//
 	// body (TFakeCmdPlr)
@@ -566,6 +603,52 @@ struct TCmdGuildState {
 	uint8_t memberCount;
 	uint8_t onlineCount;
 	uint8_t hallActive;
+};
+
+constexpr size_t MaxRaidActionPayload = 24;
+constexpr size_t MaxRaidEventPayload = 24;
+
+struct TCmdRaidAction {
+	_cmd_id bCmd;
+	uint8_t actorPlayerId;
+	uint8_t targetPlayerId;
+	uint8_t difficulty;
+	uint8_t encounterIndex;
+	uint32_t raidId;
+	uint32_t sequence;
+	uint32_t expectedVersion;
+	uint8_t payloadSize;
+	uint8_t payload[MaxRaidActionPayload];
+};
+
+struct TCmdRaidState {
+	_cmd_id bCmd;
+	uint32_t raidId;
+	uint8_t difficulty;
+	uint8_t phase;
+	uint8_t lockoutState;
+	uint8_t reserved;
+	uint32_t instanceSeed;
+	uint8_t bossStates[MaxRaidBosses];
+	uint64_t objectiveBits;
+	uint32_t timersMs[MaxRaidTimers];
+	uint32_t lockoutExpirationTick;
+	uint32_t snapshotRevision;
+	uint32_t sequence;
+};
+
+struct TCmdRaidEvent {
+	_cmd_id bCmd;
+	uint32_t raidId;
+	uint8_t encounterIndex;
+	uint8_t encounterState;
+	uint8_t payloadSize;
+	uint8_t updateTimers;
+	uint64_t objectiveBitsToSet;
+	uint32_t timersMs[MaxRaidTimers];
+	uint32_t expectedVersion;
+	uint32_t sequence;
+	uint8_t payload[MaxRaidEventPayload];
 };
 
 struct TCmdQuest {
@@ -818,6 +901,14 @@ void NetSendCmdGuildJoin(bool bHiPri);
 void NetSendCmdGuildLeave(bool bHiPri);
 void NetSendCmdGuildPromote(bool bHiPri, uint8_t targetPlayerId);
 void NetSendCmdGuildKick(bool bHiPri, uint8_t targetPlayerId);
+void NetSendCmdRaidCreate(bool bHiPri, uint32_t raidId, RaidDifficulty difficulty, uint32_t expectedVersion, uint32_t sequence = 0);
+void NetSendCmdRaidInvite(bool bHiPri, uint32_t raidId, uint8_t targetPlayerId, uint32_t expectedVersion, uint32_t sequence = 0);
+void NetSendCmdRaidJoin(bool bHiPri, uint32_t raidId, uint32_t expectedVersion, uint32_t sequence = 0);
+void NetSendCmdRaidLeave(bool bHiPri, uint32_t raidId, uint32_t expectedVersion, uint32_t sequence = 0);
+void NetSendCmdRaidReadyToggle(bool bHiPri, uint32_t raidId, uint32_t expectedVersion, uint32_t sequence = 0);
+void NetSendCmdRaidStart(bool bHiPri, uint32_t raidId, uint32_t expectedVersion, uint32_t sequence = 0);
+void NetSendCmdRaidEvent(bool bHiPri, uint32_t raidId, uint8_t encounterIndex, RaidEncounterState state, uint64_t objectiveBitsToSet, const std::array<uint32_t, MaxRaidTimers> &timersMs, bool updateTimers, uint32_t expectedVersion, uint32_t sequence = 0);
+void NetSendCmdRaidCheckpoint(bool bHiPri, uint32_t raidId, uint8_t encounterIndex, RaidEncounterState state, uint64_t objectiveBitsToSet, const std::array<uint32_t, MaxRaidTimers> &timersMs, bool updateTimers, uint32_t expectedVersion, uint32_t sequence = 0);
 void delta_close_portal(const Player &player);
 bool ValidateCmdSize(size_t requiredCmdSize, size_t maxCmdSize, size_t playerId);
 size_t ParseCmd(uint8_t pnum, const TCmd *pCmd, size_t maxCmdSize);
