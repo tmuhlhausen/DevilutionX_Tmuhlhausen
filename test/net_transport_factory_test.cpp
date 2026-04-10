@@ -40,4 +40,20 @@ TEST(NetTransportFactoryTest, UnsupportedTransportRejectsOpen)
 	EXPECT_FALSE(transport->Open("0.0.0.0", 6112).has_value());
 }
 
+TEST(NetTransportFactoryTest, SimulationTransportSupportsChaosProfiles)
+{
+	auto transport = CreateNetTransport(NetTransport::Simulation);
+	auto *simTransport = dynamic_cast<SimulatedLoopbackTransport *>(transport.get());
+	ASSERT_NE(simTransport, nullptr);
+	simTransport->SetChaosProfile(42, NetChaosProfile { .dropRate = 1.0F, .duplicateRate = 0.0F, .reorderWindow = 1 });
+	ASSERT_TRUE(simTransport->Open("127.0.0.1", 6112).has_value());
+
+	constexpr std::array<uint8_t, 2> Packet { 4, 2 };
+	ASSERT_TRUE(simTransport->Send(NetPacket { Packet }).has_value());
+	std::array<uint8_t, 8> readBuffer {};
+	const auto bytes = simTransport->PollReceive(readBuffer);
+	ASSERT_TRUE(bytes.has_value());
+	EXPECT_EQ(*bytes, 0u);
+}
+
 } // namespace devilution

@@ -140,6 +140,7 @@
 - [x] Add deterministic tick boundary + hash instrumentation.
 - [x] Implement minimal render graph with 3 passes (world, UI, post).
 - [ ] Create benchmark map + scripted network chaos test.
+  - [x] Scripted network chaos injector harness (drop/duplicate/reorder profile core).
 
 ## Approval Gates Requested
 1. Approve blueprint scope and naming (`NOVA-NET`, `AURORA-GFX`).

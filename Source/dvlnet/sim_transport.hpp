@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <deque>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -11,6 +12,7 @@
 #include <expected.hpp>
 
 #include "dvlnet/net_transport.hpp"
+#include "dvlnet/net_chaos.hpp"
 
 namespace devilution {
 
@@ -40,7 +42,13 @@ public:
 	{
 		if (!isOpen_)
 			return tl::unexpected("transport is closed");
-		inbox_.emplace_back(packet.data.begin(), packet.data.end());
+		if (chaos_.has_value()) {
+			for (std::vector<uint8_t> &mutated : chaos_->Process(packet)) {
+				inbox_.emplace_back(mutated.begin(), mutated.end());
+			}
+		} else {
+			inbox_.emplace_back(packet.data.begin(), packet.data.end());
+		}
 		return packet.data.size();
 	}
 
@@ -63,10 +71,16 @@ public:
 		return "sim-loopback";
 	}
 
+	void SetChaosProfile(uint32_t seed, NetChaosProfile profile)
+	{
+		chaos_.emplace(seed, profile);
+	}
+
 private:
 	std::string bindAddress_;
 	uint16_t port_ = 0;
 	bool isOpen_ = false;
+	std::optional<NetChaosInjector> chaos_;
 	std::deque<std::vector<uint8_t>> inbox_;
 };
 
