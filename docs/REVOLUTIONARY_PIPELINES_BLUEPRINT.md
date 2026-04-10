@@ -137,7 +137,7 @@
 ## 6) Immediate Next Actions (Highest ROI)
 - [x] Draft `INetTransport` and `IRenderBackend` interface headers.
 - [x] Add feature-flag config plumbing and startup parsing.
-- [ ] Add deterministic tick boundary + hash instrumentation.
+- [x] Add deterministic tick boundary + hash instrumentation.
 - [ ] Implement minimal render graph with 3 passes (world, UI, post).
 - [ ] Create benchmark map + scripted network chaos test.
 

@@ -32,6 +32,7 @@ set(tests
   player_test
   quests_test
   scrollrt_test
+  sim_tick_hash_test
   stores_test
   tile_properties_test
   timedemo_test

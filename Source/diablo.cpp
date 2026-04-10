@@ -941,6 +941,24 @@ void RunGameLoop(interface_mode uMsg)
 		ProcessGameMessagePackets();
 		if (game_loop(gbGameLoopStartup))
 			diablo_color_cyc_logic();
+		if (*GetOptions().Network.rollback) {
+			uint32_t simStateHash = 2166136261u;
+			for (const Player &player : Players) {
+				if (!player.isActive())
+					continue;
+				simStateHash ^= static_cast<uint32_t>(player._plrlevel + 0x9e3779b9);
+				simStateHash *= 16777619u;
+				simStateHash ^= static_cast<uint32_t>(player.position.tile.x + (player.position.tile.y << 16));
+				simStateHash *= 16777619u;
+				simStateHash ^= static_cast<uint32_t>(player._pHitPoints);
+				simStateHash *= 16777619u;
+				simStateHash ^= static_cast<uint32_t>(player._pMana);
+				simStateHash *= 16777619u;
+				simStateHash ^= static_cast<uint32_t>(player._pmode);
+				simStateHash *= 16777619u;
+			}
+			nthread_RecordSimStateHash(simStateHash);
+		}
 		gbGameLoopStartup = false;
 		if (drawGame)
 			DrawAndBlit();

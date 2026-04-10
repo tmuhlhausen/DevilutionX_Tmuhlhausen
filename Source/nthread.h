@@ -21,6 +21,8 @@ extern uint32_t gdwNormalMsgSize;
 /** @brief the progress as a fraction (see AnimationInfo::baseValueFraction) in time to the next game tick */
 extern DVL_API_FOR_TEST uint8_t ProgressToNextGameTick;
 extern int last_tick;
+extern uint64_t SimTickCount;
+extern uint32_t SimStateHash;
 
 void nthread_terminate_game(const char *pszFcn);
 uint32_t nthread_send_and_recv_turn(uint32_t curTurn, int turnDelta);
@@ -39,5 +41,6 @@ bool nthread_has_500ms_passed(bool *drawGame = nullptr);
  * @brief Updates the progress in time to the next game tick
  */
 void nthread_UpdateProgressToNextGameTick();
+void nthread_RecordSimStateHash(uint32_t hashValue);
 
 } // namespace devilution
