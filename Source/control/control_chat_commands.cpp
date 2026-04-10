@@ -1,10 +1,21 @@
 #include "control_chat_commands.hpp"
 #include "control.hpp"
 
+#include <algorithm>
+#include <bit>
+
+#ifdef USE_SDL3
+#include <SDL3/SDL_timer.h>
+#else
+#include <SDL.h>
+#endif
+
 #include "diablo_msg.hpp"
 #include "engine/backbuffer_state.hpp"
 #include "inv.h"
 #include "levels/setmaps.h"
+#include "msg.h"
+#include "raid/raid.hpp"
 #include "storm/storm_net.hpp"
 #include "utils/algorithm/container.hpp"
 #include "utils/log.hpp"
@@ -19,6 +30,38 @@
 namespace devilution {
 
 namespace {
+
+constexpr uint8_t RaidMinimumMembersToStart = 2;
+uint32_t NextRaidChatSequence = 1;
+
+[[nodiscard]] uint32_t ConsumeRaidChatSequence()
+{
+	return NextRaidChatSequence++;
+}
+
+[[nodiscard]] bool RequiresHostAuthority(const std::string_view action)
+{
+	return action == "create" || action == "invite" || action == "start" || action == "reset";
+}
+
+[[nodiscard]] std::string GetRaidPhaseLabel(RaidPhase phase)
+{
+	switch (phase) {
+	case RaidPhase::Inactive:
+		return _("Inactive");
+	case RaidPhase::Forming:
+		return _("Forming");
+	case RaidPhase::InProgress:
+		return _("In Progress");
+	case RaidPhase::Completed:
+		return _("Completed");
+	case RaidPhase::Failed:
+		return _("Failed");
+	case RaidPhase::LockedOut:
+		return _("Locked Out");
+	}
+	return _("Unknown");
+}
 
 struct TextCmdItem {
 	const std::string text;
@@ -245,6 +288,82 @@ std::string TextCmdPing(const std::string_view parameter)
 	return ret;
 }
 
+std::string TextCmdRaid(const std::string_view parameter)
+{
+	if (!gbIsMultiplayer)
+		return _("Raids are only supported in multiplayer.");
+
+	const std::string param = AsciiStrToLower(parameter);
+	const size_t splitPos = param.find(' ');
+	const std::string action = splitPos == std::string::npos ? param : param.substr(0, splitPos);
+	const std::string actionParam = splitPos == std::string::npos ? "" : param.substr(splitPos + 1);
+	if (action.empty())
+		return _("Usage: /raid <create|invite|join|ready|start|status|reset> [player]");
+
+	if (RequiresHostAuthority(action) && MyPlayerId != 0) {
+		return StrCat(_("Raid action '/raid "), action, _("' is host-only. Ask the game host to run it."));
+	}
+
+	RaidInstanceState state = GetActiveRaidState();
+	const uint32_t currentRaidId = state.raidId.IsValid() ? state.raidId.value : (SDL_GetTicks() | 1U);
+
+	if (action == "create") {
+		NetSendCmdRaidCreate(true, currentRaidId, RaidDifficulty::Normal, state.snapshotRevision, ConsumeRaidChatSequence());
+		return _("Raid create request sent.");
+	}
+
+	if (action == "invite") {
+		if (actionParam.empty())
+			return _("Usage: /raid invite <player name>");
+		auto it = c_find_if(Players, [&](const Player &player) {
+			return player.plractive && AsciiStrToLower(player._pName).find(actionParam) != std::string::npos;
+		});
+		if (it == Players.end())
+			return _("No players found with such a name");
+		NetSendCmdRaidInvite(true, currentRaidId, it->getId(), state.snapshotRevision, ConsumeRaidChatSequence());
+		return StrCat(_("Raid invite request sent to "), it->_pName, ".");
+	}
+
+	if (action == "join") {
+		NetSendCmdRaidJoin(true, currentRaidId, state.snapshotRevision, ConsumeRaidChatSequence());
+		return _("Raid join request sent.");
+	}
+
+	if (action == "ready") {
+		NetSendCmdRaidReadyToggle(true, currentRaidId, state.snapshotRevision, ConsumeRaidChatSequence());
+		return _("Raid readiness toggle sent.");
+	}
+
+	if (action == "start") {
+		NetSendCmdRaidStart(true, currentRaidId, state.snapshotRevision, ConsumeRaidChatSequence());
+		return _("Raid start request sent.");
+	}
+
+	if (action == "reset") {
+		const uint32_t resetRaidId = (SDL_GetTicks() | 1U);
+		NetSendCmdRaidCreate(true, resetRaidId, state.difficulty == RaidDifficulty::None ? RaidDifficulty::Normal : state.difficulty, state.snapshotRevision, ConsumeRaidChatSequence());
+		return _("Raid reset request sent.");
+	}
+
+	if (action == "status") {
+		const RaidLobbyUiState lobbyState = GetActiveRaidLobbyUiState();
+		const int readyCount = static_cast<int>(std::popcount(lobbyState.readyMask));
+		const int joinedCount = static_cast<int>(std::popcount(lobbyState.joinedMask));
+		return StrCat(
+		    _("Raid status"),
+		    "\n",
+		    _("Phase: "), GetRaidPhaseLabel(state.phase),
+		    "\n",
+		    _("Members: "), joinedCount, "/8",
+		    "\n",
+		    _("Ready: "), readyCount, "/", std::max(joinedCount, static_cast<int>(RaidMinimumMembersToStart)),
+		    "\n",
+		    _("Attempts left: "), static_cast<int>(lobbyState.attemptsLeft));
+	}
+
+	return _("Usage: /raid <create|invite|join|ready|start|status|reset> [player]");
+}
+
 std::vector<TextCmdItem> TextCmdList = {
 	{ "/help", N_("Prints help overview or help for a specific command."), N_("[command]"), &TextCmdHelp },
 	{ "/arena", N_("Enter a PvP Arena."), N_("<arena-number>"), &TextCmdArena },
@@ -252,6 +371,7 @@ std::vector<TextCmdItem> TextCmdList = {
 	{ "/inspect", N_("Inspects stats and equipment of another player."), N_("<player name>"), &TextCmdInspect },
 	{ "/seedinfo", N_("Show seed infos for current level."), "", &TextCmdLevelSeed },
 	{ "/ping", N_("Show latency statistics for another player."), N_("<player name>"), &TextCmdPing },
+	{ "/raid", N_("Manage raid lobby actions and status."), N_("<create|invite|join|ready|start|status|reset> [player]"), &TextCmdRaid },
 };
 
 } // namespace

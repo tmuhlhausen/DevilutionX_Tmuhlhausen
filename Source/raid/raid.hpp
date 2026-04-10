@@ -86,6 +86,13 @@ struct RaidEncounterEvent {
 	bool updateTimers = false;
 };
 
+struct RaidLobbyUiState {
+	uint32_t joinedMask = 0;
+	uint32_t readyMask = 0;
+	std::array<uint8_t, 4> roleSlots {};
+	uint8_t attemptsLeft = 0;
+};
+
 [[nodiscard]] bool CanJoinRaid(const RaidInstanceState &state, const RaidMemberSnapshot &member, uint8_t activeMemberCount, uint8_t maxMembers);
 [[nodiscard]] bool CanStartRaid(const RaidInstanceState &state, uint8_t readyMemberCount, uint8_t minimumMemberCount);
 [[nodiscard]] bool ApplyEncounterEvent(RaidInstanceState &state, const RaidEncounterEvent &event);
@@ -96,5 +103,7 @@ void ResetRaid(RaidInstanceState &state, uint32_t newInstanceSeed);
 void ResetActiveRaidState();
 RaidInstanceState GetActiveRaidState();
 void ApplyActiveRaidStateSnapshot(const RaidInstanceState &state);
+RaidLobbyUiState GetActiveRaidLobbyUiState();
+void ApplyActiveRaidLobbyUiState(const RaidLobbyUiState &state);
 
 } // namespace devilution

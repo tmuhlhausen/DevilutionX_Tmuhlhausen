@@ -1,7 +1,14 @@
 #include "panels/partypanel.hpp"
 
 #include <expected.hpp>
+#include <bit>
 #include <optional>
+
+#ifdef USE_SDL3
+#include <SDL3/SDL_timer.h>
+#else
+#include <SDL.h>
+#endif
 
 #include "automap.h"
 #include "control/control.hpp"
@@ -19,6 +26,7 @@
 #include "pfile.h"
 #include "qol/monhealthbar.h"
 #include "qol/stash.h"
+#include "raid/raid.hpp"
 #include "stores.h"
 #include "tables/playerdat.hpp"
 #include "utils/status_macros.hpp"
@@ -56,6 +64,25 @@ constexpr Size FrameSections = { 4, 4 }; // x/y can't be less than 2
 constexpr Size PortraitFrameSize = { FrameSections.width * FrameSpriteSize, FrameSections.height *FrameSpriteSize };
 
 constexpr uint8_t FrameBackgroundColor = PAL16_BLUE + 14;
+
+std::string GetRaidPhaseLabel(RaidPhase phase)
+{
+	switch (phase) {
+	case RaidPhase::Inactive:
+		return _("Inactive");
+	case RaidPhase::Forming:
+		return _("Forming");
+	case RaidPhase::InProgress:
+		return _("In Progress");
+	case RaidPhase::Completed:
+		return _("Completed");
+	case RaidPhase::Failed:
+		return _("Failed");
+	case RaidPhase::LockedOut:
+		return _("Locked Out");
+	}
+	return _("Unknown");
+}
 
 void DrawBar(const Surface &out, Rectangle rect, uint8_t color)
 {
@@ -177,6 +204,24 @@ void DrawPartyMemberInfoPanel(const Surface &out)
 
 	int currentLongestNameWidth = PortraitFrameSize.width;
 	bool portraitUnderCursor = false;
+	const Surface gameScreen = out.subregionY(0, gnViewportHeight);
+
+	const RaidInstanceState raidState = GetActiveRaidState();
+	const RaidLobbyUiState raidLobbyState = GetActiveRaidLobbyUiState();
+	if (raidState.raidId.IsValid() || raidState.phase != RaidPhase::Inactive) {
+		const int readyCount = static_cast<int>(std::popcount(raidLobbyState.readyMask));
+		const int joinedCount = static_cast<int>(std::popcount(raidLobbyState.joinedMask));
+		int lockoutSecondsLeft = 0;
+		if (raidState.lockoutExpirationTick > SDL_GetTicks())
+			lockoutSecondsLeft = static_cast<int>((raidState.lockoutExpirationTick - SDL_GetTicks()) / 1000);
+
+		const Point raidPanelPos = { pos.x, std::max(0, pos.y - 90) };
+		DrawString(gameScreen, StrCat(_("Raid Ready: "), readyCount, "/", joinedCount), { raidPanelPos.x, raidPanelPos.y }, { .flags = UiFlags::ColorGold | UiFlags::Outlined | UiFlags::FontSize12 });
+		DrawString(gameScreen, StrCat(_("Roles T/H/D/S: "), static_cast<int>(raidLobbyState.roleSlots[0]), "/", static_cast<int>(raidLobbyState.roleSlots[1]), "/", static_cast<int>(raidLobbyState.roleSlots[2]), "/", static_cast<int>(raidLobbyState.roleSlots[3])), { raidPanelPos.x, raidPanelPos.y + 12 }, { .flags = UiFlags::ColorGold | UiFlags::Outlined | UiFlags::FontSize12 });
+		DrawString(gameScreen, StrCat(_("Phase: "), GetRaidPhaseLabel(raidState.phase)), { raidPanelPos.x, raidPanelPos.y + 24 }, { .flags = UiFlags::ColorGold | UiFlags::Outlined | UiFlags::FontSize12 });
+		DrawString(gameScreen, StrCat(_("Attempts Left: "), static_cast<int>(raidLobbyState.attemptsLeft)), { raidPanelPos.x, raidPanelPos.y + 36 }, { .flags = UiFlags::ColorGold | UiFlags::Outlined | UiFlags::FontSize12 });
+		DrawString(gameScreen, StrCat(_("Lockout: "), lockoutSecondsLeft, "s"), { raidPanelPos.x, raidPanelPos.y + 48 }, { .flags = UiFlags::ColorGold | UiFlags::Outlined | UiFlags::FontSize12 });
+	}
 
 	for (Player &player : Players) {
 
@@ -189,8 +234,6 @@ void DrawPartyMemberInfoPanel(const Surface &out)
 #endif
 		// Get the rect of the portrait to use later
 		const Rectangle currentPortraitRect = { pos, PortraitFrameSize };
-
-		const Surface gameScreen = out.subregionY(0, gnViewportHeight);
 
 		// Draw the characters frame
 		RenderClxSprite(gameScreen, (*PartyMemberFrame)[0], pos);

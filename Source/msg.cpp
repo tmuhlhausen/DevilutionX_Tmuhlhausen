@@ -2695,6 +2695,8 @@ std::array<bool, MAX_PLRS> RaidReadyMembers {};
 std::array<uint32_t, MAX_PLRS> RaidLastClientSequence {};
 uint32_t RaidNextHostSequence = 1;
 uint32_t RaidLastReceivedSequence = 0;
+std::array<uint8_t, 4> RaidRoleSlots { 2, 2, 4, 0 };
+uint8_t RaidAttemptsLeft = 3;
 
 bool IsValidRaidPlayerId(uint8_t playerId)
 {
@@ -2738,6 +2740,26 @@ uint8_t GetRaidReadyCount()
 	return static_cast<uint8_t>(std::count(RaidReadyMembers.begin(), RaidReadyMembers.end(), true));
 }
 
+uint32_t GetRaidMemberMask(const std::array<bool, MAX_PLRS> &members)
+{
+	uint32_t mask = 0;
+	for (size_t i = 0; i < members.size(); i++) {
+		if (members[i])
+			mask |= (1U << i);
+	}
+	return mask;
+}
+
+void SyncRaidLobbyUiState()
+{
+	ApplyActiveRaidLobbyUiState(RaidLobbyUiState {
+		.joinedMask = GetRaidMemberMask(RaidJoinedMembers),
+		.readyMask = GetRaidMemberMask(RaidReadyMembers),
+		.roleSlots = RaidRoleSlots,
+		.attemptsLeft = RaidAttemptsLeft,
+	});
+}
+
 void SendRaidStateToPeers()
 {
 	if (MyPlayerId != 0)
@@ -2750,7 +2772,12 @@ void SendRaidStateToPeers()
 	packet.difficulty = static_cast<uint8_t>(state.difficulty);
 	packet.phase = static_cast<uint8_t>(state.phase);
 	packet.lockoutState = static_cast<uint8_t>(state.lockoutState);
+	packet.attemptsLeft = RaidAttemptsLeft;
 	packet.instanceSeed = Swap32LE(state.instanceSeed);
+	packet.joinedMask = Swap32LE(GetRaidMemberMask(RaidJoinedMembers));
+	packet.readyMask = Swap32LE(GetRaidMemberMask(RaidReadyMembers));
+	for (size_t i = 0; i < RaidRoleSlots.size(); i++)
+		packet.roleSlots[i] = RaidRoleSlots[i];
 	for (size_t i = 0; i < state.bossStates.size(); i++)
 		packet.bossStates[i] = static_cast<uint8_t>(state.bossStates[i]);
 	packet.objectiveBits = Swap64LE(state.objectiveBits);
@@ -2797,6 +2824,7 @@ size_t OnRaidAction(const TCmdRaidAction &message, const Player &player, _cmd_id
 		RaidJoinedMembers.fill(false);
 		RaidReadyMembers.fill(false);
 		RaidJoinedMembers[player.getId()] = true;
+		RaidAttemptsLeft = 3;
 		break;
 	case CMD_RAID_INVITE:
 		if (!IsValidRaidPlayerId(message.targetPlayerId))
@@ -2839,6 +2867,7 @@ size_t OnRaidAction(const TCmdRaidAction &message, const Player &player, _cmd_id
 	}
 
 	ApplyActiveRaidStateSnapshot(state);
+	SyncRaidLobbyUiState();
 	SendRaidStateToPeers();
 	return sizeof(message);
 }
@@ -2905,6 +2934,12 @@ size_t OnRaidStateSync(const TCmdRaidState &message, const Player &)
 	next.lockoutExpirationTick = Swap32LE(message.lockoutExpirationTick);
 	next.snapshotRevision = snapshotRevision;
 	ApplyActiveRaidStateSnapshot(next);
+	ApplyActiveRaidLobbyUiState(RaidLobbyUiState {
+		.joinedMask = Swap32LE(message.joinedMask),
+		.readyMask = Swap32LE(message.readyMask),
+		.roleSlots = { message.roleSlots[0], message.roleSlots[1], message.roleSlots[2], message.roleSlots[3] },
+		.attemptsLeft = message.attemptsLeft,
+	});
 	RaidLastReceivedSequence = sequence;
 	return sizeof(message);
 }
@@ -3243,6 +3278,8 @@ void delta_init()
 	RaidLastClientSequence.fill(0);
 	RaidNextHostSequence = 1;
 	RaidLastReceivedSequence = 0;
+	RaidAttemptsLeft = 3;
+	SyncRaidLobbyUiState();
 }
 
 void DeltaClearLevel(uint8_t level)
