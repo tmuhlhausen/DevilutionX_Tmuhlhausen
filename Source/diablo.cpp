@@ -54,6 +54,7 @@
 #include "engine/load_file.hpp"
 #include "engine/random.hpp"
 #include "engine/render/clx_render.hpp"
+#include "engine/render/render_graph.hpp"
 #include "engine/sound.h"
 #include "game_mode.hpp"
 #include "gamemenu.h"
@@ -894,6 +895,26 @@ void RunGameLoop(interface_mode uMsg)
 	unsigned run_game_iteration = 0;
 #endif
 
+	auto DrawFrame = []() {
+		if (!*GetOptions().Graphics.renderGraph) {
+			DrawAndBlit();
+			return;
+		}
+
+		RenderGraph graph = CreateDefaultRenderGraph(
+		    []() { DrawAndBlit(); },
+		    []() {
+			    // Reserved for explicit UI pass migration.
+		    },
+		    []() {
+			    // Reserved for explicit post pass migration.
+		    });
+		if (!graph.Execute()) {
+			// Safety fallback to legacy path.
+			DrawAndBlit();
+		}
+	};
+
 	while (gbRunGame) {
 
 #ifdef _DEBUG
@@ -934,7 +955,7 @@ void RunGameLoop(interface_mode uMsg)
 			if (!drawGame)
 				continue;
 			RedrawViewport();
-			DrawAndBlit();
+			DrawFrame();
 			continue;
 		}
 
@@ -961,7 +982,7 @@ void RunGameLoop(interface_mode uMsg)
 		}
 		gbGameLoopStartup = false;
 		if (drawGame)
-			DrawAndBlit();
+			DrawFrame();
 #ifdef GPERF_HEAP_FIRST_GAME_ITERATION
 		if (run_game_iteration++ == 0)
 			HeapProfilerDump("first_game_iteration");

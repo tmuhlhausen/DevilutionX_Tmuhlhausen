@@ -60,6 +60,7 @@
 ## 2) Graphics Pipeline Rework (AURORA-GFX)
 
 ### 2.1 Render Graph Architecture (Additive)
+- [x] Add feature-flagged render-graph execution path in frame loop with legacy fallback.
 - [ ] Replace ad-hoc pass ordering with declarative render-graph DAG.
 - [ ] Explicit resource lifetime + transient texture aliasing.
 - [ ] Automatic barrier/sync generation per backend.
