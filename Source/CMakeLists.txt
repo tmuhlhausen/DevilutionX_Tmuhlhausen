@@ -15,6 +15,7 @@ set(libdevilutionx_SRCS
   gamemenu.cpp
   gmenu.cpp
   guild/guild.cpp
+  raid/raid.cpp
   help.cpp
   hwcursor.cpp
   interfac.cpp
