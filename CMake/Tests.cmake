@@ -78,6 +78,7 @@ set(benchmarks
   crawl_benchmark
   dun_render_benchmark
   light_render_benchmark
+  net_chaos_benchmark
   palette_blending_benchmark
   path_benchmark
 )
