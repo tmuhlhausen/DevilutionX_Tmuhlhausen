@@ -1,0 +1,4 @@
+encounter_id	phase_id	enter_condition	exit_condition	failure_policy	mechanic_id	mechanic_type	period_ms	first_trigger_ms	enrage_ms
+1	0	None	BossHealthAtMost:70	Wipe	101	AoEPulse	15000	5000	480000
+1	1	BossHealthAtMost:70	BossHealthAtMost:40	CheckpointRollback	201	AddWave	30000	10000	480000
+1	2	BossHealthAtMost:40	BossHealthAtMost:0	Wipe	301	PositionalCheck	20000	0	480000

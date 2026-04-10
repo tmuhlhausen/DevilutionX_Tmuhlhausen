@@ -19,6 +19,7 @@ set(libdevilutionx_SRCS
   raid/raid_rules.cpp
   raid/raid_state.cpp
   raid/raid_routing.cpp
+  raid/encounter/encounter_engine.cpp
   help.cpp
   hwcursor.cpp
   interfac.cpp
