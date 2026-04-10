@@ -1,35 +1,51 @@
 #include "raid/raid_routing.hpp"
 
 #include <algorithm>
-#include <limits>
 
 namespace devilution {
 
 namespace {
 
-uint32_t MixRaidId(uint32_t raidId)
+constexpr uint64_t FnvOffsetBasis = 1469598103934665603ULL;
+constexpr uint64_t FnvPrime = 1099511628211ULL;
+
+void MixIntoHash(uint64_t &hash, uint64_t value)
 {
-	raidId ^= raidId >> 16;
-	raidId *= 0x7feb352dU;
-	raidId ^= raidId >> 15;
-	raidId *= 0x846ca68bU;
-	raidId ^= raidId >> 16;
-	return raidId;
+	for (int shift = 0; shift < 64; shift += 8) {
+		hash ^= (value >> shift) & 0xFF;
+		hash *= FnvPrime;
+	}
 }
 
 } // namespace
 
-uint8_t ComputeRaidMultiplayerLevel(uint32_t raidId, uint8_t encounterIndex, uint8_t raidMultiplayerBase)
+uint64_t ComputeRaidMultiplayerKey(uint32_t guildId, uint32_t raidId, uint8_t encounterIndex, uint32_t shard)
 {
+	uint64_t hash = FnvOffsetBasis;
+	MixIntoHash(hash, guildId);
+	MixIntoHash(hash, raidId);
+	MixIntoHash(hash, encounterIndex);
+	MixIntoHash(hash, shard);
+	return hash;
+}
+
+RaidRoutingResult ComputeRaidMultiplayerLevel(uint32_t guildId, uint32_t raidId, uint8_t encounterIndex, uint32_t shard, uint8_t raidMultiplayerBase)
+{
+	if (raidId == 0)
+		return { MaxMultiplayerLevelValue, RaidRoutingDenialReason::InvalidRaidId };
+
+	const uint8_t maxActiveRaidInstances = GetMaxActiveRaidInstances(raidMultiplayerBase);
+	if (maxActiveRaidInstances == 0)
+		return { MaxMultiplayerLevelValue, RaidRoutingDenialReason::BaseOutOfRange };
+	if (shard >= maxActiveRaidInstances)
+		return { MaxMultiplayerLevelValue, RaidRoutingDenialReason::InstanceCapacityExceeded };
+
 	const uint8_t normalizedEncounter = encounterIndex % RaidEncounterBuckets;
-	const uint8_t raidBucket = MixRaidId(raidId) % MaxActiveRaidInstances;
-	const uint16_t offset = raidBucket * RaidEncounterBuckets + normalizedEncounter;
+	const uint8_t raidBucket = static_cast<uint8_t>(ComputeRaidMultiplayerKey(guildId, raidId, 0, shard) % maxActiveRaidInstances);
+	const uint16_t offset = static_cast<uint16_t>(raidBucket) * RaidEncounterBuckets + normalizedEncounter;
 	const uint16_t level = raidMultiplayerBase + offset;
-
-	if (level > std::numeric_limits<uint8_t>::max())
-		return std::numeric_limits<uint8_t>::max();
-
-	return static_cast<uint8_t>(level);
+	const uint8_t routedLevel = std::min<uint16_t>(level, MaxMultiplayerLevelValue);
+	return { routedLevel, RaidRoutingDenialReason::None };
 }
 
 } // namespace devilution
