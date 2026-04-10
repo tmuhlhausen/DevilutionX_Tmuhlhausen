@@ -20,7 +20,7 @@
 - [x] Introduce a transport interface (`INetTransport`) with adapters for:
   - [ ] UDP (baseline)
   - [ ] QUIC (reliable streams + datagrams)
-  - [ ] Local loopback simulation mode
+  - [x] Local loopback simulation mode
 - [x] Add runtime transport selection (`--net-transport=udp|quic|sim`).
 
 ### 1.2 Tick-Accurate Deterministic Core
