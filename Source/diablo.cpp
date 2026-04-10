@@ -5,6 +5,7 @@
  */
 #include <array>
 #include <cstdint>
+#include <optional>
 #include <string_view>
 
 #ifdef USE_SDL3
@@ -41,6 +42,7 @@
 #include "diablo.h"
 #include "diablo_msg.hpp"
 #include "discord/discord.h"
+#include "dvlnet/net_transport_mode.hpp"
 #include "doom.h"
 #include "encrypt.h"
 #include "engine/backbuffer_state.hpp"
@@ -1020,6 +1022,11 @@ extern "C" void SdlLogToFile(void *userdata, int /*category*/, SDL_LogPriority p
 	PrintHelpOption("-n", _(/* TRANSLATORS: Commandline Option */ "Skip startup videos"));
 	PrintHelpOption("-f", _(/* TRANSLATORS: Commandline Option */ "Display frames per second"));
 	PrintHelpOption("--verbose", _(/* TRANSLATORS: Commandline Option */ "Enable verbose logging"));
+	PrintHelpOption("--net-transport <udp|quic|sim>", _(/* TRANSLATORS: Commandline Option */ "Select network transport backend"));
+	PrintHelpOption("--net-nova-transport", _(/* TRANSLATORS: Commandline Option */ "Enable experimental NOVA transport pipeline"));
+	PrintHelpOption("--net-rollback", _(/* TRANSLATORS: Commandline Option */ "Enable experimental rollback/prediction networking"));
+	PrintHelpOption("--gfx-render-graph", _(/* TRANSLATORS: Commandline Option */ "Enable experimental render graph pipeline"));
+	PrintHelpOption("--gfx-gpu-driven", _(/* TRANSLATORS: Commandline Option */ "Enable experimental GPU-driven rendering"));
 #if SDL_VERSION_ATLEAST(2, 0, 0)
 	PrintHelpOption("--log-to-file <path>", _(/* TRANSLATORS: Commandline Option */ "Log to a file instead of stderr"));
 #endif
@@ -1155,6 +1162,25 @@ void DiabloParseFlags(int argc, char **argv)
 			gbVanilla = true;
 		} else if (arg == "--verbose") {
 			SDL_SetLogPriorities(SDL_LOG_PRIORITY_VERBOSE);
+		} else if (arg == "--net-transport") {
+			if (i + 1 == argc) {
+				PrintFlagRequiresArgument("--net-transport");
+				diablo_quit(64);
+			}
+			const std::optional<NetTransport> transport = ParseNetTransportMode(argv[++i]);
+			if (!transport.has_value()) {
+				PrintFlagMessage("--net-transport", " must be one of: udp, quic, sim");
+				diablo_quit(64);
+			}
+			GetOptions().Network.transport.SetValue(*transport);
+		} else if (arg == "--net-nova-transport") {
+			GetOptions().Network.novaTransport.SetValue(true);
+		} else if (arg == "--net-rollback") {
+			GetOptions().Network.rollback.SetValue(true);
+		} else if (arg == "--gfx-render-graph") {
+			GetOptions().Graphics.renderGraph.SetValue(true);
+		} else if (arg == "--gfx-gpu-driven") {
+			GetOptions().Graphics.gpuDriven.SetValue(true);
 #if SDL_VERSION_ATLEAST(2, 0, 0)
 		} else if (arg == "--log-to-file") {
 			if (i + 1 == argc) {
