@@ -24,6 +24,7 @@
 #include "engine/point.hpp"
 #include "engine/random.hpp"
 #include "game_mode.hpp"
+#include "guild/guild_progression.hpp"
 #include "inv.h"
 #include "levels/dun_tile.hpp"
 #include "lighting.h"
@@ -54,6 +55,7 @@ namespace {
 constexpr size_t MaxMissilesForSaveGame = 125;
 constexpr size_t PlayerWalkPathSizeForSaveGame = 25;
 constexpr uint8_t PlayerSaveFormatRevision = 2;
+constexpr uint8_t GuildProgressionPayloadVersion = 1;
 
 uint8_t giNumberQuests;
 uint8_t giNumberOfSmithPremiumItems;
@@ -254,6 +256,42 @@ public:
 		m_mpqWriter.WriteFile(m_szFileName_, m_buffer_.get(), encodedLen);
 	}
 };
+
+void LoadGuildProgressionPayload(LoadHelper &file)
+{
+	ResetGuildProgression();
+	if (!file.IsValid(sizeof(uint8_t)))
+		return;
+
+	const uint8_t payloadVersion = file.NextLE<uint8_t>();
+	if (payloadVersion != GuildProgressionPayloadVersion)
+		return;
+
+	GuildProgressionPersistedState state {};
+	state.guildId.value = file.NextLE<uint32_t>();
+	for (uint32_t &counter : state.counters)
+		counter = file.NextLE<uint32_t>();
+	for (uint64_t &milestoneBits : state.completedMilestones)
+		milestoneBits = file.NextLE<uint64_t>();
+	state.usedDedupKeys = file.NextLE<uint16_t>();
+	for (uint64_t &dedupKey : state.dedupKeys)
+		dedupKey = file.NextLE<uint64_t>();
+	ApplyGuildProgressionPersistedState(state);
+}
+
+void SaveGuildProgressionPayload(SaveHelper &file)
+{
+	file.WriteLE<uint8_t>(GuildProgressionPayloadVersion);
+	const GuildProgressionPersistedState state = GetGuildProgressionPersistedState();
+	file.WriteLE<uint32_t>(state.guildId.value);
+	for (uint32_t counter : state.counters)
+		file.WriteLE<uint32_t>(counter);
+	for (uint64_t milestoneBits : state.completedMilestones)
+		file.WriteLE<uint64_t>(milestoneBits);
+	file.WriteLE<uint16_t>(state.usedDedupKeys);
+	for (uint64_t dedupKey : state.dedupKeys)
+		file.WriteLE<uint64_t>(dedupKey);
+}
 
 struct MonsterConversionData {
 	int8_t monsterLevel;
@@ -2688,6 +2726,7 @@ tl::expected<void, std::string> LoadGame(bool firstflag)
 
 	AutomapActive = file.NextBool8();
 	AutoMapScale = file.NextBE<int32_t>();
+	LoadGuildProgressionPayload(file);
 	AutomapZoomReset();
 	ResyncQuests();
 
@@ -2951,6 +2990,7 @@ void SaveGameData(SaveWriter &saveWriter)
 
 	file.WriteLE<uint8_t>(AutomapActive ? 1 : 0);
 	file.WriteBE<int32_t>(AutoMapScale);
+	SaveGuildProgressionPayload(file);
 
 	SaveAdditionalMissiles(saveWriter);
 	SaveLevelSeeds(saveWriter);

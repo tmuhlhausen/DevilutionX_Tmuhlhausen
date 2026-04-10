@@ -39,6 +39,7 @@
 #include "engine/world_tile.hpp"
 #include "gamemenu.h"
 #include "guild/guild.hpp"
+#include "guild/guild_progression.hpp"
 #include "items/validation.h"
 #include "levels/crypt.h"
 #include "levels/town.h"
@@ -3235,6 +3236,7 @@ void delta_init()
 	DeltaLevels.clear();
 	LocalLevels.clear();
 	ResetGuildState();
+	ResetGuildProgression();
 	ResetActiveRaidState();
 	RaidJoinedMembers.fill(false);
 	RaidReadyMembers.fill(false);
