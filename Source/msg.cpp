@@ -10,7 +10,6 @@
 #include <cstdint>
 #include <algorithm>
 #include <list>
-#include <limits>
 #include <memory>
 #include <optional>
 #include <string_view>
@@ -39,7 +38,6 @@
 #include "engine/world_tile.hpp"
 #include "gamemenu.h"
 #include "guild/guild.hpp"
-#include "guild/guild_progression.hpp"
 #include "items/validation.h"
 #include "levels/crypt.h"
 #include "levels/town.h"
@@ -57,7 +55,6 @@
 #include "plrmsg.h"
 #include "portals/validation.hpp"
 #include "quests/validation.hpp"
-#include "raid/raid_routing.hpp"
 #include "spells.h"
 #include "storm/storm_net.hpp"
 #include "sync.h"
@@ -297,10 +294,8 @@ struct DJunk {
 constexpr uint8_t GuildMultiplayerBuckets = 32;
 constexpr uint8_t GuildSetLevelsCount = 2;
 constexpr uint8_t GuildMultiplayerBase = NUMLEVELS + SL_LAST + 1;
-constexpr uint8_t RaidMultiplayerBase = GuildMultiplayerBase + GuildMultiplayerBuckets * GuildSetLevelsCount;
-constexpr size_t MaxMultiplayerLevels = RaidMultiplayerBase + RaidMultiplayerLevelSpan - 1;
+constexpr size_t MaxMultiplayerLevels = GuildMultiplayerBase + GuildMultiplayerBuckets * GuildSetLevelsCount;
 constexpr size_t MaxChunks = MaxMultiplayerLevels + 4;
-static_assert(MaxMultiplayerLevels <= std::numeric_limits<uint8_t>::max(), "Multiplayer level routing exceeds uint8_t storage.");
 
 uint32_t sgdwOwnerWait;
 uint32_t sgdwRecvOffset;
@@ -2695,74 +2690,6 @@ std::array<bool, MAX_PLRS> RaidReadyMembers {};
 std::array<uint32_t, MAX_PLRS> RaidLastClientSequence {};
 uint32_t RaidNextHostSequence = 1;
 uint32_t RaidLastReceivedSequence = 0;
-ankerl::unordered_dense::map<_cmd_id, uint32_t> RaidPacketValidationFailures {};
-
-struct RaidTelemetry {
-	uint32_t startedAtTick = 0;
-	uint64_t completedEncounterCount = 0;
-	uint64_t cumulativeEncounterDurationMs = 0;
-	uint32_t wipeCount = 0;
-};
-
-RaidTelemetry ActiveRaidTelemetry {};
-
-const char *RaidCmdName(_cmd_id cmd)
-{
-	switch (cmd) {
-	case CMD_RAID_CREATE:
-		return "CMD_RAID_CREATE";
-	case CMD_RAID_INVITE:
-		return "CMD_RAID_INVITE";
-	case CMD_RAID_JOIN:
-		return "CMD_RAID_JOIN";
-	case CMD_RAID_LEAVE:
-		return "CMD_RAID_LEAVE";
-	case CMD_RAID_READY_TOGGLE:
-		return "CMD_RAID_READY_TOGGLE";
-	case CMD_RAID_START:
-		return "CMD_RAID_START";
-	case CMD_RAID_EVENT:
-		return "CMD_RAID_EVENT";
-	case CMD_RAID_CHECKPOINT:
-		return "CMD_RAID_CHECKPOINT";
-	case CMD_RAID_STATE_SYNC:
-		return "CMD_RAID_STATE_SYNC";
-	default:
-		return "CMD_UNKNOWN";
-	}
-}
-
-void RecordRaidPacketValidationFailure(_cmd_id cmd, std::string_view reason)
-{
-	const uint32_t failures = ++RaidPacketValidationFailures[cmd];
-	LogDebug("Raid packet validation failed for {} (count: {}, reason: {})", RaidCmdName(cmd), failures, reason);
-}
-
-bool IsRaidCoreEnabled()
-{
-	return GetOptions().Gameplay.phaseERaidCore;
-}
-
-bool IsRaidEncountersEnabled()
-{
-	return GetOptions().Gameplay.phaseFRaidEncounters;
-}
-
-bool IsRaidProgressionEnabled()
-{
-	return GetOptions().Gameplay.phaseGRaidProgressionRewards;
-}
-
-void LogRaidDurationMetrics()
-{
-	if (ActiveRaidTelemetry.completedEncounterCount == 0) {
-		LogInfo("Raid metrics: wipes={}, completedEncounters=0", ActiveRaidTelemetry.wipeCount);
-		return;
-	}
-	const double averageEncounterDurationMs = static_cast<double>(ActiveRaidTelemetry.cumulativeEncounterDurationMs) / ActiveRaidTelemetry.completedEncounterCount;
-	LogInfo("Raid metrics: avgEncounterDurationMs={:.2f}, wipes={}, completedEncounters={}",
-	    averageEncounterDurationMs, ActiveRaidTelemetry.wipeCount, ActiveRaidTelemetry.completedEncounterCount);
-}
 
 bool IsValidRaidPlayerId(uint8_t playerId)
 {
@@ -2834,38 +2761,24 @@ size_t OnRaidAction(const TCmdRaidAction &message, const Player &player, _cmd_id
 {
 	if (gbBufferMsgs == 1 || MyPlayerId != 0 || message.bCmd != expectedCmd)
 		return sizeof(message);
-	if (!IsRaidCoreEnabled())
+	if (message.payloadSize > MaxRaidActionPayload || !IsValidRaidPlayerId(message.actorPlayerId) || !IsValidRaidPlayerId(message.targetPlayerId))
 		return sizeof(message);
-	if (!IsRaidEncountersEnabled())
+	if (message.actorPlayerId != player.getId())
 		return sizeof(message);
-	if (message.payloadSize > MaxRaidActionPayload || !IsValidRaidPlayerId(message.actorPlayerId) || !IsValidRaidPlayerId(message.targetPlayerId)) {
-		RecordRaidPacketValidationFailure(expectedCmd, "invalid payload or player id");
-		return sizeof(message);
-	}
-	if (message.actorPlayerId != player.getId()) {
-		RecordRaidPacketValidationFailure(expectedCmd, "actor id mismatch");
-		return sizeof(message);
-	}
 
 	const uint32_t sequence = Swap32LE(message.sequence);
-	if (sequence <= RaidLastClientSequence[player.getId()]) {
-		RecordRaidPacketValidationFailure(expectedCmd, "out-of-order sequence");
+	if (sequence <= RaidLastClientSequence[player.getId()])
 		return sizeof(message);
-	}
 	RaidLastClientSequence[player.getId()] = sequence;
 
 	RaidInstanceState state = GetActiveRaidState();
 	const uint32_t raidId = Swap32LE(message.raidId);
 	const uint32_t expectedVersion = Swap32LE(message.expectedVersion);
 
-	if (expectedVersion != state.snapshotRevision) {
-		RecordRaidPacketValidationFailure(expectedCmd, "snapshot mismatch");
+	if (expectedVersion != state.snapshotRevision)
 		return sizeof(message);
-	}
-	if (message.bCmd != CMD_RAID_CREATE && (!state.raidId.IsValid() || state.raidId.value != raidId)) {
-		RecordRaidPacketValidationFailure(expectedCmd, "raid id mismatch");
+	if (message.bCmd != CMD_RAID_CREATE && (!state.raidId.IsValid() || state.raidId.value != raidId))
 		return sizeof(message);
-	}
 
 	switch (message.bCmd) {
 	case CMD_RAID_CREATE:
@@ -2879,7 +2792,6 @@ size_t OnRaidAction(const TCmdRaidAction &message, const Player &player, _cmd_id
 		RaidJoinedMembers.fill(false);
 		RaidReadyMembers.fill(false);
 		RaidJoinedMembers[player.getId()] = true;
-		LogInfo("Raid event: join (type=create, playerId={}, raidId={})", player.getId(), raidId);
 		break;
 	case CMD_RAID_INVITE:
 		if (!IsValidRaidPlayerId(message.targetPlayerId))
@@ -2894,7 +2806,6 @@ size_t OnRaidAction(const TCmdRaidAction &message, const Player &player, _cmd_id
 		if (state.phase == RaidPhase::Inactive)
 			state.phase = RaidPhase::Forming;
 		state.snapshotRevision++;
-		LogInfo("Raid event: join (playerId={}, raidId={})", player.getId(), raidId);
 		break;
 	}
 	case CMD_RAID_LEAVE:
@@ -2902,11 +2813,8 @@ size_t OnRaidAction(const TCmdRaidAction &message, const Player &player, _cmd_id
 			return sizeof(message);
 		RaidJoinedMembers[player.getId()] = false;
 		RaidReadyMembers[player.getId()] = false;
-		if (GetRaidMemberCount() == 0) {
+		if (GetRaidMemberCount() == 0)
 			ResetRaid(state, SDL_GetTicks());
-			ActiveRaidTelemetry = {};
-			LogInfo("Raid event: reset (reason=empty_party, raidId={})", raidId);
-		}
 		state.snapshotRevision++;
 		break;
 	case CMD_RAID_READY_TOGGLE:
@@ -2920,8 +2828,6 @@ size_t OnRaidAction(const TCmdRaidAction &message, const Player &player, _cmd_id
 			return sizeof(message);
 		state.phase = RaidPhase::InProgress;
 		state.snapshotRevision++;
-		ActiveRaidTelemetry.startedAtTick = SDL_GetTicks();
-		LogInfo("Raid event: start (raidId={}, playersReady={})", raidId, GetRaidReadyCount());
 		break;
 	default:
 		return sizeof(message);
@@ -2966,29 +2872,19 @@ size_t OnRaidStateSync(const TCmdRaidState &message, const Player &)
 {
 	if (gbBufferMsgs == 1 || MyPlayerId == 0)
 		return sizeof(message);
-	if (!IsRaidCoreEnabled())
+	if (!IsValidRaidDifficulty(message.difficulty) && message.difficulty != static_cast<uint8_t>(RaidDifficulty::None))
 		return sizeof(message);
-	if (!IsValidRaidDifficulty(message.difficulty) && message.difficulty != static_cast<uint8_t>(RaidDifficulty::None)) {
-		RecordRaidPacketValidationFailure(CMD_RAID_STATE_SYNC, "invalid difficulty");
+	if (message.phase > static_cast<uint8_t>(RaidPhase::LockedOut))
 		return sizeof(message);
-	}
-	if (message.phase > static_cast<uint8_t>(RaidPhase::LockedOut)) {
-		RecordRaidPacketValidationFailure(CMD_RAID_STATE_SYNC, "invalid phase");
-		return sizeof(message);
-	}
 
 	const uint32_t sequence = Swap32LE(message.sequence);
 	const uint32_t snapshotRevision = Swap32LE(message.snapshotRevision);
-	if (sequence <= RaidLastReceivedSequence) {
-		RecordRaidPacketValidationFailure(CMD_RAID_STATE_SYNC, "out-of-order sequence");
+	if (sequence <= RaidLastReceivedSequence)
 		return sizeof(message);
-	}
 
 	RaidInstanceState current = GetActiveRaidState();
-	if (snapshotRevision < current.snapshotRevision) {
-		RecordRaidPacketValidationFailure(CMD_RAID_STATE_SYNC, "stale snapshot");
+	if (snapshotRevision < current.snapshotRevision)
 		return sizeof(message);
-	}
 
 	RaidInstanceState next {};
 	next.raidId.value = Swap32LE(message.raidId);
@@ -3005,10 +2901,6 @@ size_t OnRaidStateSync(const TCmdRaidState &message, const Player &)
 	next.snapshotRevision = snapshotRevision;
 	ApplyActiveRaidStateSnapshot(next);
 	RaidLastReceivedSequence = sequence;
-	if (next.phase == RaidPhase::Inactive) {
-		LogInfo("Raid event: reset (reason=state_sync, raidId={})", next.raidId.value);
-		ActiveRaidTelemetry = {};
-	}
 	return sizeof(message);
 }
 
@@ -3016,33 +2908,21 @@ size_t OnRaidEvent(const TCmdRaidEvent &message, const Player &, _cmd_id expecte
 {
 	if (gbBufferMsgs == 1 || MyPlayerId == 0 || message.bCmd != expectedCmd)
 		return sizeof(message);
-	if (!IsRaidCoreEnabled())
+	if (message.payloadSize > MaxRaidEventPayload || message.encounterIndex >= MaxRaidBosses || !IsValidRaidEncounterState(message.encounterState))
 		return sizeof(message);
-	if (!IsRaidEncountersEnabled())
-		return sizeof(message);
-	if (message.payloadSize > MaxRaidEventPayload || message.encounterIndex >= MaxRaidBosses || !IsValidRaidEncounterState(message.encounterState)) {
-		RecordRaidPacketValidationFailure(expectedCmd, "invalid payload or encounter");
-		return sizeof(message);
-	}
 
 	const uint32_t sequence = Swap32LE(message.sequence);
-	if (sequence <= RaidLastReceivedSequence) {
-		RecordRaidPacketValidationFailure(expectedCmd, "out-of-order sequence");
+	if (sequence <= RaidLastReceivedSequence)
 		return sizeof(message);
-	}
 
 	RaidInstanceState state = GetActiveRaidState();
 	const uint32_t raidId = Swap32LE(message.raidId);
-	if (!state.raidId.IsValid() || state.raidId.value != raidId) {
-		RecordRaidPacketValidationFailure(expectedCmd, "raid id mismatch");
+	if (!state.raidId.IsValid() || state.raidId.value != raidId)
 		return sizeof(message);
-	}
 
 	const uint32_t expectedVersion = Swap32LE(message.expectedVersion);
-	if (expectedVersion != state.snapshotRevision) {
-		RecordRaidPacketValidationFailure(expectedCmd, "snapshot mismatch");
+	if (expectedVersion != state.snapshotRevision)
 		return sizeof(message);
-	}
 
 	RaidEncounterEvent event {};
 	event.bossIndex = message.encounterIndex;
@@ -3053,30 +2933,6 @@ size_t OnRaidEvent(const TCmdRaidEvent &message, const Player &, _cmd_id expecte
 		event.timersMs[i] = Swap32LE(message.timersMs[i]);
 	if (!ApplyEncounterEvent(state, event))
 		return sizeof(message);
-
-	const RaidEncounterState encounterState = static_cast<RaidEncounterState>(message.encounterState);
-	if (encounterState == RaidEncounterState::Defeated) {
-		const uint32_t nowTicks = SDL_GetTicks();
-		if (ActiveRaidTelemetry.startedAtTick != 0 && nowTicks >= ActiveRaidTelemetry.startedAtTick) {
-			ActiveRaidTelemetry.cumulativeEncounterDurationMs += nowTicks - ActiveRaidTelemetry.startedAtTick;
-			ActiveRaidTelemetry.completedEncounterCount++;
-		}
-		const bool allDefeated = std::all_of(state.bossStates.begin(), state.bossStates.end(), [](RaidEncounterState bossState) {
-			return bossState == RaidEncounterState::Defeated;
-		});
-		if (allDefeated) {
-			LogInfo("Raid event: clear (raidId={})", raidId);
-			LogRaidDurationMetrics();
-		}
-	} else if (encounterState == RaidEncounterState::Failed) {
-		ActiveRaidTelemetry.wipeCount++;
-		LogInfo("Raid event: wipe (raidId={}, totalWipes={})", raidId, ActiveRaidTelemetry.wipeCount);
-		LogRaidDurationMetrics();
-		if (!IsRaidProgressionEnabled()) {
-			state.lockoutState = RaidLockoutState::None;
-			state.lockoutExpirationTick = 0;
-		}
-	}
 
 	ApplyActiveRaidStateSnapshot(state);
 	RaidLastReceivedSequence = sequence;
@@ -3375,7 +3231,6 @@ void delta_init()
 	DeltaLevels.clear();
 	LocalLevels.clear();
 	ResetGuildState();
-	ResetGuildProgression();
 	ResetActiveRaidState();
 	RaidJoinedMembers.fill(false);
 	RaidReadyMembers.fill(false);
@@ -3522,23 +3377,12 @@ uint8_t GetLevelForMultiplayer(const Player &player)
 			const uint8_t guildBucket = guildId.value() % GuildMultiplayerBuckets;
 			return GuildMultiplayerBase + guildBucket + guildLevelIndex * GuildMultiplayerBuckets;
 		}
-
-		const RaidInstanceState raid = GetActiveRaidState();
-		if (raid.raidId.IsValid() && IsArenaLevel(setLevel))
-			return ComputeRaidMultiplayerLevel(raid.raidId.value, player.plrlevel, RaidMultiplayerBase);
 	}
 	return GetLevelForMultiplayer(player.plrlevel, player.plrIsOnSetLevel);
 }
 
 bool IsValidLevelForMultiplayer(uint8_t level)
 {
-	// Multiplayer level routes:
-	//   - base campaign/town levels
-	//   - guild buckets for guild hall/map set levels
-	//   - raid instance routes (raidId + encounter/floor slot)
-	//
-	// Raid routing caps active instance buckets to MaxActiveRaidInstances and
-	// normalizes encounter index with modulo, ensuring deterministic overflow.
 	return level <= MaxMultiplayerLevels;
 }
 
