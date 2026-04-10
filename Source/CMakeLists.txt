@@ -17,6 +17,7 @@ set(libdevilutionx_SRCS
   guild/guild.cpp
   guild/guild_progression.cpp
   raid/raid.cpp
+  raid/raid_progression.cpp
   raid/raid_routing.cpp
   help.cpp
   hwcursor.cpp
