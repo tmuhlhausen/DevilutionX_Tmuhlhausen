@@ -695,6 +695,14 @@ struct NetworkOptions : OptionCategoryBase {
 	OptionEntryBoolean novaTransport;
 	/** @brief Enable the experimental rollback networking path. */
 	OptionEntryBoolean rollback;
+	/** @brief Chaos injector packet drop percent (0-100) for simulation transport. */
+	OptionEntryInt<int> chaosDropPct;
+	/** @brief Chaos injector duplicate percent (0-100) for simulation transport. */
+	OptionEntryInt<int> chaosDuplicatePct;
+	/** @brief Chaos injector reorder window for simulation transport. */
+	OptionEntryInt<int> chaosReorderWindow;
+	/** @brief Chaos injector deterministic seed for simulation transport. */
+	OptionEntryInt<int> chaosSeed;
 };
 
 struct ChatOptions : OptionCategoryBase {

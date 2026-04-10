@@ -40,6 +40,7 @@
 - [ ] Delta-compressed component replication with schema versioning.
 
 ### 1.5 Congestion + QoS Intelligence
+- [x] Add runtime chaos profile CLI controls for simulation transport (drop/dup/reorder/seed).
 - [ ] Packet budget allocator per frame using moving RTT/loss/jitter windows.
 - [ ] Dynamic reliability policy (auto-upgrade event channels when loss spikes).
 - [ ] FEC pilot mode for high-loss links.

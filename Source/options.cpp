@@ -958,6 +958,10 @@ NetworkOptions::NetworkOptions()
           })
     , novaTransport("NOVA Transport", OptionEntryFlags::Invisible | OptionEntryFlags::CantChangeInMultiPlayer, N_("NOVA Transport"), N_("Enable the NOVA transport feature pipeline."), false)
     , rollback("Rollback Netcode", OptionEntryFlags::Invisible | OptionEntryFlags::CantChangeInMultiPlayer, N_("Rollback Netcode"), N_("Enable rollback and prediction pipeline hooks."), false)
+    , chaosDropPct("Chaos Drop Percent", OptionEntryFlags::Invisible | OptionEntryFlags::CantChangeInMultiPlayer, N_("Chaos Drop Percent"), N_("Packet drop percent for simulation transport chaos injector."), 0, { 0, 1, 2, 5, 10, 15, 20, 30, 50, 75, 100 })
+    , chaosDuplicatePct("Chaos Duplicate Percent", OptionEntryFlags::Invisible | OptionEntryFlags::CantChangeInMultiPlayer, N_("Chaos Duplicate Percent"), N_("Packet duplication percent for simulation transport chaos injector."), 0, { 0, 1, 2, 5, 10, 15, 20, 30, 50, 75, 100 })
+    , chaosReorderWindow("Chaos Reorder Window", OptionEntryFlags::Invisible | OptionEntryFlags::CantChangeInMultiPlayer, N_("Chaos Reorder Window"), N_("Packet reorder window for simulation transport chaos injector."), 1, { 1, 2, 3, 4, 6, 8, 12, 16 })
+    , chaosSeed("Chaos Seed", OptionEntryFlags::Invisible | OptionEntryFlags::CantChangeInMultiPlayer, N_("Chaos Seed"), N_("Deterministic random seed for simulation transport chaos injector."), 1337, { 7, 42, 1337, 9001, 65535 })
 {
 }
 std::vector<OptionEntryBase *> NetworkOptions::GetEntries()
@@ -967,6 +971,10 @@ std::vector<OptionEntryBase *> NetworkOptions::GetEntries()
 		&transport,
 		&novaTransport,
 		&rollback,
+		&chaosDropPct,
+		&chaosDuplicatePct,
+		&chaosReorderWindow,
+		&chaosSeed,
 	};
 }
 

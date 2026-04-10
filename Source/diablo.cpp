@@ -1064,6 +1064,10 @@ extern "C" void SdlLogToFile(void *userdata, int /*category*/, SDL_LogPriority p
 	PrintHelpOption("--net-transport <udp|quic|sim>", _(/* TRANSLATORS: Commandline Option */ "Select network transport backend"));
 	PrintHelpOption("--net-nova-transport", _(/* TRANSLATORS: Commandline Option */ "Enable experimental NOVA transport pipeline"));
 	PrintHelpOption("--net-rollback", _(/* TRANSLATORS: Commandline Option */ "Enable experimental rollback/prediction networking"));
+	PrintHelpOption("--net-chaos-drop-pct <0-100>", _(/* TRANSLATORS: Commandline Option */ "Set simulation transport packet drop percentage"));
+	PrintHelpOption("--net-chaos-dup-pct <0-100>", _(/* TRANSLATORS: Commandline Option */ "Set simulation transport packet duplicate percentage"));
+	PrintHelpOption("--net-chaos-reorder-window <1-16>", _(/* TRANSLATORS: Commandline Option */ "Set simulation transport reorder window"));
+	PrintHelpOption("--net-chaos-seed <int>", _(/* TRANSLATORS: Commandline Option */ "Set simulation transport deterministic chaos seed"));
 	PrintHelpOption("--gfx-render-graph", _(/* TRANSLATORS: Commandline Option */ "Enable experimental render graph pipeline"));
 	PrintHelpOption("--gfx-gpu-driven", _(/* TRANSLATORS: Commandline Option */ "Enable experimental GPU-driven rendering"));
 #if SDL_VERSION_ATLEAST(2, 0, 0)
@@ -1216,6 +1220,50 @@ void DiabloParseFlags(int argc, char **argv)
 			GetOptions().Network.novaTransport.SetValue(true);
 		} else if (arg == "--net-rollback") {
 			GetOptions().Network.rollback.SetValue(true);
+		} else if (arg == "--net-chaos-drop-pct") {
+			if (i + 1 == argc) {
+				PrintFlagRequiresArgument("--net-chaos-drop-pct");
+				diablo_quit(64);
+			}
+			ParseIntResult<int> value = ParseInt<int>(argv[++i]);
+			if (!value.has_value() || *value < 0 || *value > 100) {
+				PrintFlagMessage("--net-chaos-drop-pct", " must be in range 0..100");
+				diablo_quit(64);
+			}
+			GetOptions().Network.chaosDropPct.SetValue(*value);
+		} else if (arg == "--net-chaos-dup-pct") {
+			if (i + 1 == argc) {
+				PrintFlagRequiresArgument("--net-chaos-dup-pct");
+				diablo_quit(64);
+			}
+			ParseIntResult<int> value = ParseInt<int>(argv[++i]);
+			if (!value.has_value() || *value < 0 || *value > 100) {
+				PrintFlagMessage("--net-chaos-dup-pct", " must be in range 0..100");
+				diablo_quit(64);
+			}
+			GetOptions().Network.chaosDuplicatePct.SetValue(*value);
+		} else if (arg == "--net-chaos-reorder-window") {
+			if (i + 1 == argc) {
+				PrintFlagRequiresArgument("--net-chaos-reorder-window");
+				diablo_quit(64);
+			}
+			ParseIntResult<int> value = ParseInt<int>(argv[++i]);
+			if (!value.has_value() || *value < 1 || *value > 16) {
+				PrintFlagMessage("--net-chaos-reorder-window", " must be in range 1..16");
+				diablo_quit(64);
+			}
+			GetOptions().Network.chaosReorderWindow.SetValue(*value);
+		} else if (arg == "--net-chaos-seed") {
+			if (i + 1 == argc) {
+				PrintFlagRequiresArgument("--net-chaos-seed");
+				diablo_quit(64);
+			}
+			ParseIntResult<int> value = ParseInt<int>(argv[++i]);
+			if (!value.has_value()) {
+				PrintFlagMessage("--net-chaos-seed", " must be an integer");
+				diablo_quit(64);
+			}
+			GetOptions().Network.chaosSeed.SetValue(*value);
 		} else if (arg == "--gfx-render-graph") {
 			GetOptions().Graphics.renderGraph.SetValue(true);
 		} else if (arg == "--gfx-gpu-driven") {

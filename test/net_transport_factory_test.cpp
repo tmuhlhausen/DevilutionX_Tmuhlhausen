@@ -42,10 +42,15 @@ TEST(NetTransportFactoryTest, UnsupportedTransportRejectsOpen)
 
 TEST(NetTransportFactoryTest, SimulationTransportSupportsChaosProfiles)
 {
-	auto transport = CreateNetTransport(NetTransport::Simulation);
+	NetTransportRuntimeConfig config {
+		.mode = NetTransport::Simulation,
+		.enableChaos = true,
+		.chaosSeed = 42,
+		.chaosProfile = NetChaosProfile { .dropRate = 1.0F, .duplicateRate = 0.0F, .reorderWindow = 1 },
+	};
+	auto transport = CreateNetTransport(config);
 	auto *simTransport = dynamic_cast<SimulatedLoopbackTransport *>(transport.get());
 	ASSERT_NE(simTransport, nullptr);
-	simTransport->SetChaosProfile(42, NetChaosProfile { .dropRate = 1.0F, .duplicateRate = 0.0F, .reorderWindow = 1 });
 	ASSERT_TRUE(simTransport->Open("127.0.0.1", 6112).has_value());
 
 	constexpr std::array<uint8_t, 2> Packet { 4, 2 };

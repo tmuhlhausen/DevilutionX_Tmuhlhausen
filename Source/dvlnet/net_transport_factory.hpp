@@ -44,17 +44,30 @@ private:
 	std::string name_;
 };
 
+struct NetTransportRuntimeConfig {
+	NetTransport mode = NetTransport::Udp;
+	bool enableChaos = false;
+	uint32_t chaosSeed = 1337;
+	NetChaosProfile chaosProfile {};
+};
+
+[[nodiscard]] inline std::unique_ptr<INetTransport> CreateNetTransport(const NetTransportRuntimeConfig &config)
+{
+	if (config.mode == NetTransport::Simulation) {
+		auto transport = std::make_unique<SimulatedLoopbackTransport>();
+		if (config.enableChaos) {
+			transport->SetChaosProfile(config.chaosSeed, config.chaosProfile);
+		}
+		return transport;
+	}
+	if (config.mode == NetTransport::Quic)
+		return std::make_unique<UnsupportedTransport>("quic");
+	return std::make_unique<UnsupportedTransport>("udp");
+}
+
 [[nodiscard]] inline std::unique_ptr<INetTransport> CreateNetTransport(NetTransport mode)
 {
-	switch (mode) {
-	case NetTransport::Simulation:
-		return std::make_unique<SimulatedLoopbackTransport>();
-	case NetTransport::Quic:
-		return std::make_unique<UnsupportedTransport>("quic");
-	case NetTransport::Udp:
-		return std::make_unique<UnsupportedTransport>("udp");
-	}
-	return std::make_unique<UnsupportedTransport>("udp");
+	return CreateNetTransport(NetTransportRuntimeConfig { .mode = mode });
 }
 
 } // namespace devilution
