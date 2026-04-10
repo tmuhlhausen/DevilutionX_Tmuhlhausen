@@ -880,7 +880,9 @@ GameplayOptions::GameplayOptions()
     , phaseBRarityDropPipeline("Phase B - Rarity + Drops", OptionEntryFlags::CantChangeInMultiPlayer, N_("Phase B - Rarity + Drops"), N_("Enable the new rarity, drop-pipeline and scaling systems."), false)
     , phaseCGuildCoreProtocol("Phase C - Guild Core Protocol", OptionEntryFlags::CantChangeInMultiPlayer, N_("Phase C - Guild Core Protocol"), N_("Enable the guild core protocol and membership persistence."), false)
     , phaseDGuildHallsEndgame("Phase D - Guild Halls + Endgame", OptionEntryFlags::CantChangeInMultiPlayer, N_("Phase D - Guild Halls + Endgame"), N_("Enable guild halls/maps and endgame-loop integration."), false)
-    , phaseEBalanceAntiCheat("Phase E - Balance + Anti-cheat", OptionEntryFlags::CantChangeInMultiPlayer, N_("Phase E - Balance + Anti-cheat"), N_("Enable balancing pass values and anti-cheat hardening paths."), false)
+    , phaseERaidCore("Phase E - Raid Core", OptionEntryFlags::CantChangeInMultiPlayer, N_("Phase E - Raid Core"), N_("Enable raid state and protocol synchronization primitives."), false)
+    , phaseFRaidEncounters("Phase F - Raid Encounters", OptionEntryFlags::CantChangeInMultiPlayer, N_("Phase F - Raid Encounters"), N_("Enable raid lobby, ready-check, and encounter event flows."), false)
+    , phaseGRaidProgressionRewards("Phase G - Raid Progression + Rewards", OptionEntryFlags::CantChangeInMultiPlayer, N_("Phase G - Raid Progression + Rewards"), N_("Enable raid progression rewards, lockouts, and completion accounting."), false)
     , requireDeterministicMultiplayerItemRecreation("Require deterministic MP item recreation", OptionEntryFlags::CantChangeInMultiPlayer, N_("Require deterministic MP item recreation"), N_("Require deterministic multiplayer item recreation checks before enabling new loot systems by default."), true)
     , skipLoadingScreenThresholdMs("Skip loading screen threshold, ms", OptionEntryFlags::Invisible, "", "", 0)
 {
@@ -930,7 +932,9 @@ std::vector<OptionEntryBase *> GameplayOptions::GetEntries()
 		&phaseBRarityDropPipeline,
 		&phaseCGuildCoreProtocol,
 		&phaseDGuildHallsEndgame,
-		&phaseEBalanceAntiCheat,
+		&phaseERaidCore,
+		&phaseFRaidEncounters,
+		&phaseGRaidProgressionRewards,
 		&requireDeterministicMultiplayerItemRecreation,
 		&grabInput,
 		&pauseOnFocusLoss,
