@@ -298,9 +298,12 @@ constexpr uint8_t GuildMultiplayerBuckets = 32;
 constexpr uint8_t GuildSetLevelsCount = 2;
 constexpr uint8_t GuildMultiplayerBase = NUMLEVELS + SL_LAST + 1;
 constexpr uint8_t RaidMultiplayerBase = GuildMultiplayerBase + GuildMultiplayerBuckets * GuildSetLevelsCount;
+constexpr uint8_t MaxActiveRaidInstances = GetMaxActiveRaidInstances(RaidMultiplayerBase);
+constexpr size_t RaidMultiplayerLevelSpan = GetRaidMultiplayerLevelSpan(RaidMultiplayerBase);
 constexpr size_t MaxMultiplayerLevels = RaidMultiplayerBase + RaidMultiplayerLevelSpan - 1;
 constexpr size_t MaxChunks = MaxMultiplayerLevels + 4;
 static_assert(MaxMultiplayerLevels <= std::numeric_limits<uint8_t>::max(), "Multiplayer level routing exceeds uint8_t storage.");
+static_assert(MaxActiveRaidInstances > 0, "Raid multiplayer base leaves no routing room.");
 
 uint32_t sgdwOwnerWait;
 uint32_t sgdwRecvOffset;
@@ -2750,6 +2753,7 @@ void SendRaidStateToPeers()
 	packet.difficulty = static_cast<uint8_t>(state.difficulty);
 	packet.phase = static_cast<uint8_t>(state.phase);
 	packet.lockoutState = static_cast<uint8_t>(state.lockoutState);
+	packet.reserved = static_cast<uint8_t>(state.reservedNetSync);
 	packet.instanceSeed = Swap32LE(state.instanceSeed);
 	for (size_t i = 0; i < state.bossStates.size(); i++)
 		packet.bossStates[i] = static_cast<uint8_t>(state.bossStates[i]);
@@ -2793,6 +2797,8 @@ size_t OnRaidAction(const TCmdRaidAction &message, const Player &player, _cmd_id
 		state.raidId.value = raidId;
 		state.difficulty = static_cast<RaidDifficulty>(message.difficulty);
 		state.phase = RaidPhase::Forming;
+		state.reservedNetSync = std::max<uint8_t>(1, MaxActiveRaidInstances);
+		state.reservedNetSync = raidId % state.reservedNetSync;
 		state.snapshotRevision++;
 		RaidJoinedMembers.fill(false);
 		RaidReadyMembers.fill(false);
@@ -2896,6 +2902,11 @@ size_t OnRaidStateSync(const TCmdRaidState &message, const Player &)
 	next.difficulty = static_cast<RaidDifficulty>(message.difficulty);
 	next.phase = static_cast<RaidPhase>(message.phase);
 	next.lockoutState = static_cast<RaidLockoutState>(message.lockoutState);
+	next.reservedNetSync = message.reserved;
+	if (next.reservedNetSync >= MaxActiveRaidInstances) {
+		EventPlrMsg(_("Raid shard overflow. Instance routing denied."));
+		return sizeof(message);
+	}
 	next.instanceSeed = Swap32LE(message.instanceSeed);
 	for (size_t i = 0; i < next.bossStates.size(); i++)
 		next.bossStates[i] = static_cast<RaidEncounterState>(message.bossStates[i]);
@@ -3385,8 +3396,28 @@ uint8_t GetLevelForMultiplayer(const Player &player)
 		}
 
 		const RaidInstanceState raid = GetActiveRaidState();
-		if (raid.raidId.IsValid() && IsArenaLevel(setLevel))
-			return ComputeRaidMultiplayerLevel(raid.raidId.value, player.plrlevel, RaidMultiplayerBase);
+		if (raid.raidId.IsValid() && IsArenaLevel(setLevel)) {
+			const auto routing = ComputeRaidMultiplayerLevel(ActiveGuildId, raid.raidId.value, player.plrlevel, raid.reservedNetSync, RaidMultiplayerBase);
+			if (!routing.IsDenied())
+				return routing.level;
+
+			if (&player == MyPlayer) {
+				switch (routing.denialReason) {
+				case RaidRoutingDenialReason::InstanceCapacityExceeded:
+					EventPlrMsg(_("Raid shard overflow. Instance routing denied."));
+					break;
+				case RaidRoutingDenialReason::BaseOutOfRange:
+					EventPlrMsg(_("Raid routing table exhausted. Entry denied."));
+					break;
+				case RaidRoutingDenialReason::InvalidRaidId:
+					EventPlrMsg(_("Raid state unavailable. Entry denied."));
+					break;
+				case RaidRoutingDenialReason::None:
+					break;
+				}
+			}
+			return GetLevelForMultiplayer(player.plrlevel, player.plrIsOnSetLevel);
+		}
 	}
 	return GetLevelForMultiplayer(player.plrlevel, player.plrIsOnSetLevel);
 }
@@ -3398,8 +3429,7 @@ bool IsValidLevelForMultiplayer(uint8_t level)
 	//   - guild buckets for guild hall/map set levels
 	//   - raid instance routes (raidId + encounter/floor slot)
 	//
-	// Raid routing caps active instance buckets to MaxActiveRaidInstances and
-	// normalizes encounter index with modulo, ensuring deterministic overflow.
+	// Raid routing caps active instance buckets to fit in the uint8 level space.
 	return level <= MaxMultiplayerLevels;
 }
 
