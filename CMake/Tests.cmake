@@ -58,6 +58,7 @@ set(standalone_tests
   ini_test
   net_transport_factory_test
   net_chaos_test
+  net_qos_test
   net_transport_mode_test
   palette_blending_test
   parse_int_test
