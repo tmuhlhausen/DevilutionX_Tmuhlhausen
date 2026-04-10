@@ -16,6 +16,7 @@ set(libdevilutionx_SRCS
   gmenu.cpp
   guild/guild.cpp
   raid/raid.cpp
+  raid/raid_routing.cpp
   help.cpp
   hwcursor.cpp
   interfac.cpp

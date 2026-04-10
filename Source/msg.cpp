@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <algorithm>
 #include <list>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <string_view>
@@ -55,6 +56,7 @@
 #include "plrmsg.h"
 #include "portals/validation.hpp"
 #include "quests/validation.hpp"
+#include "raid/raid_routing.hpp"
 #include "spells.h"
 #include "storm/storm_net.hpp"
 #include "sync.h"
@@ -294,8 +296,10 @@ struct DJunk {
 constexpr uint8_t GuildMultiplayerBuckets = 32;
 constexpr uint8_t GuildSetLevelsCount = 2;
 constexpr uint8_t GuildMultiplayerBase = NUMLEVELS + SL_LAST + 1;
-constexpr size_t MaxMultiplayerLevels = GuildMultiplayerBase + GuildMultiplayerBuckets * GuildSetLevelsCount;
+constexpr uint8_t RaidMultiplayerBase = GuildMultiplayerBase + GuildMultiplayerBuckets * GuildSetLevelsCount;
+constexpr size_t MaxMultiplayerLevels = RaidMultiplayerBase + RaidMultiplayerLevelSpan - 1;
 constexpr size_t MaxChunks = MaxMultiplayerLevels + 4;
+static_assert(MaxMultiplayerLevels <= std::numeric_limits<uint8_t>::max(), "Multiplayer level routing exceeds uint8_t storage.");
 
 uint32_t sgdwOwnerWait;
 uint32_t sgdwRecvOffset;
@@ -3377,12 +3381,23 @@ uint8_t GetLevelForMultiplayer(const Player &player)
 			const uint8_t guildBucket = guildId.value() % GuildMultiplayerBuckets;
 			return GuildMultiplayerBase + guildBucket + guildLevelIndex * GuildMultiplayerBuckets;
 		}
+
+		const RaidInstanceState raid = GetActiveRaidState();
+		if (raid.raidId.IsValid() && IsArenaLevel(setLevel))
+			return ComputeRaidMultiplayerLevel(raid.raidId.value, player.plrlevel, RaidMultiplayerBase);
 	}
 	return GetLevelForMultiplayer(player.plrlevel, player.plrIsOnSetLevel);
 }
 
 bool IsValidLevelForMultiplayer(uint8_t level)
 {
+	// Multiplayer level routes:
+	//   - base campaign/town levels
+	//   - guild buckets for guild hall/map set levels
+	//   - raid instance routes (raidId + encounter/floor slot)
+	//
+	// Raid routing caps active instance buckets to MaxActiveRaidInstances and
+	// normalizes encounter index with modulo, ensuring deterministic overflow.
 	return level <= MaxMultiplayerLevels;
 }
 
