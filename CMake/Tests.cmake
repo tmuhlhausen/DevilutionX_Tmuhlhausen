@@ -63,6 +63,7 @@ set(standalone_tests
   path_test
   vision_test
   random_test
+  render_graph_test
   rectangle_test
   static_vector_test
   str_cat_test

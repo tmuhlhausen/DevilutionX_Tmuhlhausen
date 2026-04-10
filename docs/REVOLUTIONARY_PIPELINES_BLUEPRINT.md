@@ -138,7 +138,7 @@
 - [x] Draft `INetTransport` and `IRenderBackend` interface headers.
 - [x] Add feature-flag config plumbing and startup parsing.
 - [x] Add deterministic tick boundary + hash instrumentation.
-- [ ] Implement minimal render graph with 3 passes (world, UI, post).
+- [x] Implement minimal render graph with 3 passes (world, UI, post).
 - [ ] Create benchmark map + scripted network chaos test.
 
 ## Approval Gates Requested
