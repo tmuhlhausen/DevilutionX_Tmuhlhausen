@@ -32,6 +32,7 @@ set(tests
   player_test
   quests_test
   scrollrt_test
+  sim_tick_hash_test
   stores_test
   tile_properties_test
   timedemo_test
@@ -55,6 +56,8 @@ set(standalone_tests
   file_util_test
   format_int_test
   ini_test
+  net_transport_factory_test
+  net_transport_mode_test
   palette_blending_test
   parse_int_test
   path_test
