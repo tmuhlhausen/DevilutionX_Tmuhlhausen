@@ -2690,10 +2690,7 @@ void BroadcastGuildState()
 constexpr uint8_t MaxRaidMembers = 8;
 constexpr uint8_t MinRaidMembersToStart = 2;
 
-std::array<bool, MAX_PLRS> RaidJoinedMembers {};
-std::array<bool, MAX_PLRS> RaidReadyMembers {};
 std::array<uint32_t, MAX_PLRS> RaidLastClientSequence {};
-uint32_t RaidNextHostSequence = 1;
 uint32_t RaidLastReceivedSequence = 0;
 
 bool IsValidRaidPlayerId(uint8_t playerId)
@@ -2711,33 +2708,6 @@ bool IsValidRaidEncounterState(uint8_t encounterState)
 	return encounterState <= static_cast<uint8_t>(RaidEncounterState::Failed);
 }
 
-bool IsValidRaidPhaseTransition(RaidPhase current, RaidPhase next)
-{
-	switch (current) {
-	case RaidPhase::Inactive:
-		return next == RaidPhase::Forming;
-	case RaidPhase::Forming:
-		return next == RaidPhase::InProgress || next == RaidPhase::Inactive;
-	case RaidPhase::InProgress:
-		return next == RaidPhase::Completed || next == RaidPhase::Failed;
-	case RaidPhase::Completed:
-	case RaidPhase::Failed:
-	case RaidPhase::LockedOut:
-		return next == RaidPhase::Inactive;
-	}
-	return false;
-}
-
-uint8_t GetRaidMemberCount()
-{
-	return static_cast<uint8_t>(std::count(RaidJoinedMembers.begin(), RaidJoinedMembers.end(), true));
-}
-
-uint8_t GetRaidReadyCount()
-{
-	return static_cast<uint8_t>(std::count(RaidReadyMembers.begin(), RaidReadyMembers.end(), true));
-}
-
 void SendRaidStateToPeers()
 {
 	if (MyPlayerId != 0)
@@ -2749,7 +2719,7 @@ void SendRaidStateToPeers()
 	packet.raidId = Swap32LE(state.raidId.value);
 	packet.difficulty = static_cast<uint8_t>(state.difficulty);
 	packet.phase = static_cast<uint8_t>(state.phase);
-	packet.lockoutState = static_cast<uint8_t>(state.lockoutState);
+	packet.lockoutState = static_cast<uint8_t>(state.lockout);
 	packet.instanceSeed = Swap32LE(state.instanceSeed);
 	for (size_t i = 0; i < state.bossStates.size(); i++)
 		packet.bossStates[i] = static_cast<uint8_t>(state.bossStates[i]);
@@ -2758,7 +2728,7 @@ void SendRaidStateToPeers()
 		packet.timersMs[i] = Swap32LE(state.timersMs[i]);
 	packet.lockoutExpirationTick = Swap32LE(state.lockoutExpirationTick);
 	packet.snapshotRevision = Swap32LE(state.snapshotRevision);
-	packet.sequence = Swap32LE(RaidNextHostSequence++);
+	packet.sequence = Swap32LE(state.sequence);
 	NetSendLoPri(MyPlayerId, reinterpret_cast<std::byte *>(&packet), sizeof(packet));
 }
 
@@ -2787,16 +2757,14 @@ size_t OnRaidAction(const TCmdRaidAction &message, const Player &player, _cmd_id
 
 	switch (message.bCmd) {
 	case CMD_RAID_CREATE:
-		if (raidId == 0 || !IsValidRaidDifficulty(message.difficulty) || !IsValidRaidPhaseTransition(state.phase, RaidPhase::Forming))
+		if (raidId == 0 || !IsValidRaidDifficulty(message.difficulty) || !CanProgressPhase(state.phase, RaidPhase::Forming))
 			return sizeof(message);
 		ResetRaid(state, SDL_GetTicks());
 		state.raidId.value = raidId;
 		state.difficulty = static_cast<RaidDifficulty>(message.difficulty);
 		state.phase = RaidPhase::Forming;
-		state.snapshotRevision++;
-		RaidJoinedMembers.fill(false);
-		RaidReadyMembers.fill(false);
-		RaidJoinedMembers[player.getId()] = true;
+		SetRaidMemberJoined(state, player.getId(), true);
+		AdvanceRaidStateSequence(state);
 		break;
 	case CMD_RAID_INVITE:
 		if (!IsValidRaidPlayerId(message.targetPlayerId))
@@ -2804,35 +2772,33 @@ size_t OnRaidAction(const TCmdRaidAction &message, const Player &player, _cmd_id
 		break;
 	case CMD_RAID_JOIN: {
 		const RaidMemberSnapshot member { player.getId(), !player._pHitPoints.isZero(), 0, RaidRoleDamage };
-		if (!CanJoinRaid(state, member, GetRaidMemberCount(), MaxRaidMembers))
+		if (!CanJoinRaid(state, member, GetRaidMemberCount(state), MaxRaidMembers))
 			return sizeof(message);
-		RaidJoinedMembers[player.getId()] = true;
-		RaidReadyMembers[player.getId()] = false;
+		SetRaidMemberJoined(state, player.getId(), true);
 		if (state.phase == RaidPhase::Inactive)
 			state.phase = RaidPhase::Forming;
-		state.snapshotRevision++;
+		AdvanceRaidStateSequence(state);
 		break;
 	}
 	case CMD_RAID_LEAVE:
-		if (!RaidJoinedMembers[player.getId()])
+		if (!IsRaidMemberJoined(state, player.getId()))
 			return sizeof(message);
-		RaidJoinedMembers[player.getId()] = false;
-		RaidReadyMembers[player.getId()] = false;
-		if (GetRaidMemberCount() == 0)
+		SetRaidMemberJoined(state, player.getId(), false);
+		if (GetRaidMemberCount(state) == 0)
 			ResetRaid(state, SDL_GetTicks());
-		state.snapshotRevision++;
+		AdvanceRaidStateSequence(state);
 		break;
 	case CMD_RAID_READY_TOGGLE:
-		if (!RaidJoinedMembers[player.getId()] || state.phase != RaidPhase::Forming)
+		if (!IsRaidMemberJoined(state, player.getId()) || state.phase != RaidPhase::Forming)
 			return sizeof(message);
-		RaidReadyMembers[player.getId()] = !RaidReadyMembers[player.getId()];
-		state.snapshotRevision++;
+		ToggleRaidMemberReady(state, player.getId());
+		AdvanceRaidStateSequence(state);
 		break;
 	case CMD_RAID_START:
-		if (!CanStartRaid(state, GetRaidReadyCount(), MinRaidMembersToStart) || !IsValidRaidPhaseTransition(state.phase, RaidPhase::InProgress))
+		if (!CanStartRaid(state, GetRaidReadyCount(state), MinRaidMembersToStart) || !CanProgressPhase(state.phase, RaidPhase::InProgress))
 			return sizeof(message);
 		state.phase = RaidPhase::InProgress;
-		state.snapshotRevision++;
+		AdvanceRaidStateSequence(state);
 		break;
 	default:
 		return sizeof(message);
@@ -2895,7 +2861,7 @@ size_t OnRaidStateSync(const TCmdRaidState &message, const Player &)
 	next.raidId.value = Swap32LE(message.raidId);
 	next.difficulty = static_cast<RaidDifficulty>(message.difficulty);
 	next.phase = static_cast<RaidPhase>(message.phase);
-	next.lockoutState = static_cast<RaidLockoutState>(message.lockoutState);
+	next.lockout = static_cast<RaidLockout>(message.lockoutState);
 	next.instanceSeed = Swap32LE(message.instanceSeed);
 	for (size_t i = 0; i < next.bossStates.size(); i++)
 		next.bossStates[i] = static_cast<RaidEncounterState>(message.bossStates[i]);
@@ -2904,7 +2870,9 @@ size_t OnRaidStateSync(const TCmdRaidState &message, const Player &)
 		next.timersMs[i] = Swap32LE(message.timersMs[i]);
 	next.lockoutExpirationTick = Swap32LE(message.lockoutExpirationTick);
 	next.snapshotRevision = snapshotRevision;
-	ApplyActiveRaidStateSnapshot(next);
+	next.sequence = sequence;
+	if (!ApplyActiveRaidStateSnapshot(next))
+		return sizeof(message);
 	RaidLastReceivedSequence = sequence;
 	return sizeof(message);
 }
@@ -2939,7 +2907,9 @@ size_t OnRaidEvent(const TCmdRaidEvent &message, const Player &, _cmd_id expecte
 	if (!ApplyEncounterEvent(state, event))
 		return sizeof(message);
 
-	ApplyActiveRaidStateSnapshot(state);
+	state.sequence = sequence;
+	if (!ApplyActiveRaidStateSnapshot(state))
+		return sizeof(message);
 	RaidLastReceivedSequence = sequence;
 	return sizeof(message);
 }
@@ -3238,10 +3208,7 @@ void delta_init()
 	ResetGuildState();
 	ResetGuildProgression();
 	ResetActiveRaidState();
-	RaidJoinedMembers.fill(false);
-	RaidReadyMembers.fill(false);
 	RaidLastClientSequence.fill(0);
-	RaidNextHostSequence = 1;
 	RaidLastReceivedSequence = 0;
 }
 

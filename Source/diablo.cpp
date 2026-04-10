@@ -88,6 +88,7 @@
 #include "panels/console.hpp"
 #include "panels/info_box.hpp"
 #include "panels/partypanel.hpp"
+#include "raid/raid_state.hpp"
 #include "panels/spell_book.hpp"
 #include "panels/spell_list.hpp"
 #include "pfile.h"
@@ -2755,6 +2756,8 @@ void SetCursorPos(Point position)
 
 void FreeGameMem()
 {
+	ResetRaidSubsystem();
+
 	pDungeonCels = nullptr;
 	pMegaTiles = nullptr;
 	pSpecialCels = std::nullopt;
@@ -2775,6 +2778,7 @@ bool StartGame(bool bNewGame, bool bSinglePlayer)
 {
 	gbSelectProvider = true;
 	ReturnToMainMenu = false;
+	InitializeRaidSubsystem();
 
 	do {
 		gbLoadGame = false;
