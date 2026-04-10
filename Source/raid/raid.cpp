@@ -2,6 +2,10 @@
 
 #include <algorithm>
 
+#include "guild/guild_progression.hpp"
+#include "levels/gendung.h"
+#include "player.h"
+
 namespace devilution {
 namespace {
 
@@ -20,6 +24,19 @@ bool IsTerminalPhase(RaidPhase phase)
 void BumpRevision(RaidInstanceState &state)
 {
 	state.snapshotRevision++;
+}
+
+uint8_t ResolveGuildLevel(GuildId guildId)
+{
+	uint8_t guildLevel = 0;
+	for (const Player &player : Players) {
+		if (!player.plractive)
+			continue;
+		if (player.guildMemberState.guildId != guildId)
+			continue;
+		guildLevel = std::max(guildLevel, player.pNephilimLevel);
+	}
+	return guildLevel;
 }
 
 } // namespace
@@ -76,6 +93,9 @@ bool CompleteRaid(RaidInstanceState &state, uint32_t lockoutExpirationTick)
 	state.lockoutState = RaidLockoutState::Active;
 	state.lockoutExpirationTick = lockoutExpirationTick;
 	std::fill(state.bossStates.begin(), state.bossStates.end(), RaidEncounterState::Defeated);
+	const GuildId guildId { ActiveGuildId };
+	const uint8_t guildLevel = ResolveGuildLevel(guildId);
+	HandleRaidCompletionForGuild(state.raidId.value, guildId, guildLevel, static_cast<uint8_t>(state.bossStates.size()));
 	BumpRevision(state);
 	return true;
 }
