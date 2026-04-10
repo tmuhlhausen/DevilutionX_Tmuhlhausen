@@ -33,6 +33,8 @@ uint32_t gdwLargestMsgSize;
 uint32_t gdwNormalMsgSize;
 int last_tick;
 uint8_t ProgressToNextGameTick = 0;
+uint64_t SimTickCount = 0;
+uint32_t SimStateHash = 0;
 
 namespace {
 
@@ -145,6 +147,8 @@ void nthread_set_turn_upper_bit()
 void nthread_start(bool setTurnUpperBit)
 {
 	last_tick = SDL_GetTicks();
+	SimTickCount = 0;
+	SimStateHash = 0;
 	sgbPacketCountdown = 1;
 	sgbSyncCountdown = 1;
 	sgbTicsOutOfSync = true;
@@ -257,6 +261,12 @@ void nthread_UpdateProgressToNextGameTick()
 	int32_t fraction = ticksAdvanced * AnimationInfo::baseValueFraction / gnTickDelay;
 	fraction = std::clamp<int32_t>(fraction, 0, AnimationInfo::baseValueFraction);
 	ProgressToNextGameTick = static_cast<uint8_t>(fraction);
+}
+
+void nthread_RecordSimStateHash(uint32_t hashValue)
+{
+	++SimTickCount;
+	SimStateHash ^= hashValue + 0x9E3779B9u + (SimStateHash << 6) + (SimStateHash >> 2);
 }
 
 } // namespace devilution
