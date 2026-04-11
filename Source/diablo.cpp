@@ -4,9 +4,11 @@
  * Implementation of the main game initialization functions.
  */
 #include <array>
+#include <cstring>
 #include <cstdint>
 #include <optional>
 #include <string_view>
+#include <vector>
 
 #ifdef USE_SDL3
 #include <SDL3/SDL_events.h>
@@ -42,8 +44,8 @@
 #include "diablo.h"
 #include "diablo_msg.hpp"
 #include "discord/discord.h"
-#include "dvlnet/net_telemetry.hpp"
 #include "dvlnet/net_transport_mode.hpp"
+#include "dvlnet/rollback_state.hpp"
 #include "doom.h"
 #include "encrypt.h"
 #include "engine/backbuffer_state.hpp"
@@ -181,6 +183,56 @@ bool was_archives_init = false;
 /** To know if surfaces have been initialized or not */
 bool was_window_init = false;
 bool was_ui_init = false;
+
+template <typename T>
+void AppendRollbackBytes(std::vector<std::byte> &snapshot, const T &value)
+{
+	const auto *start = reinterpret_cast<const std::byte *>(&value);
+	snapshot.insert(snapshot.end(), start, start + sizeof(T));
+}
+
+std::vector<std::byte> CaptureRollbackSnapshot()
+{
+	std::vector<std::byte> snapshot;
+	for (const Player &player : Players) {
+		const bool active = player.isActive();
+		AppendRollbackBytes(snapshot, active);
+		if (!active)
+			continue;
+		AppendRollbackBytes(snapshot, player._plrlevel);
+		AppendRollbackBytes(snapshot, player.position.tile.x);
+		AppendRollbackBytes(snapshot, player.position.tile.y);
+		AppendRollbackBytes(snapshot, player._pHitPoints);
+		AppendRollbackBytes(snapshot, player._pMana);
+		AppendRollbackBytes(snapshot, player._pmode);
+	}
+	return snapshot;
+}
+
+bool RestoreRollbackSnapshot(std::span<const std::byte> snapshot)
+{
+	size_t offset = 0;
+	auto read = [&](auto &value) -> bool {
+		constexpr size_t Size = sizeof(value);
+		if (offset + Size > snapshot.size())
+			return false;
+		memcpy(&value, snapshot.data() + offset, Size);
+		offset += Size;
+		return true;
+	};
+
+	for (Player &player : Players) {
+		bool active = false;
+		if (!read(active))
+			return false;
+		if (!active)
+			continue;
+		if (!read(player._plrlevel) || !read(player.position.tile.x) || !read(player.position.tile.y) || !read(player._pHitPoints) || !read(player._pMana) || !read(player._pmode))
+			return false;
+		player.position.future = player.position.tile;
+	}
+	return true;
+}
 
 void StartGame(interface_mode uMsg)
 {
@@ -965,7 +1017,6 @@ void RunGameLoop(interface_mode uMsg)
 		if (game_loop(gbGameLoopStartup))
 			diablo_color_cyc_logic();
 		if (*GetOptions().Network.rollback) {
-			const uint32_t rollbackStart = SDL_GetTicks();
 			uint32_t simStateHash = 2166136261u;
 			for (const Player &player : Players) {
 				if (!player.isActive())
@@ -982,7 +1033,15 @@ void RunGameLoop(interface_mode uMsg)
 				simStateHash *= 16777619u;
 			}
 			nthread_RecordSimStateHash(simStateHash);
-			GetNetTelemetryAggregator().RecordRollbackMs(static_cast<float>(SDL_GetTicks() - rollbackStart));
+			const std::vector<std::byte> snapshot = CaptureRollbackSnapshot();
+			dvlnet::GetRollbackState().StoreSnapshot(SimTickCount, snapshot, simStateHash);
+			dvlnet::GetRollbackState().HandleCorrection(SimTickCount, simStateHash, SimTickCount,
+			    [](std::span<const std::byte> snapshotBytes) {
+				    return RestoreRollbackSnapshot(snapshotBytes);
+			    },
+			    [](std::span<const std::byte> /*input*/) {
+				    // Replay integration for authoritative correction is intentionally conservative for now.
+			    });
 		}
 		gbGameLoopStartup = false;
 		if (drawGame)
