@@ -6,6 +6,7 @@
 
 #include "raid/raid_progression.hpp"
 #include "levels/gendung.h"
+#include "options.h"
 #include "player.h"
 
 namespace devilution {
@@ -93,24 +94,17 @@ bool CompleteRaid(RaidInstanceState &state, uint32_t lockoutExpirationTick)
 		return false;
 
 	state.phase = RaidPhase::Completed;
-	state.lockoutState = RaidLockoutState::Active;
-	state.lockoutExpirationTick = lockoutExpirationTick;
 	std::fill(state.bossStates.begin(), state.bossStates.end(), RaidEncounterState::Defeated);
-	const GuildId guildId { ActiveGuildId };
-	const uint8_t guildLevel = ResolveGuildLevel(guildId);
-	std::vector<uint8_t> participantIds {};
-	for (const Player &player : Players) {
-		if (!player.plractive)
-			continue;
-		if (player.guildMemberState.guildId != guildId)
-			continue;
-		participantIds.push_back(player.getId());
+	if (GetOptions().Gameplay.phaseGRaidProgressionRewards) {
+		state.lockoutState = RaidLockoutState::Active;
+		state.lockoutExpirationTick = lockoutExpirationTick;
+		const GuildId guildId { ActiveGuildId };
+		const uint8_t guildLevel = ResolveGuildLevel(guildId);
+		HandleRaidCompletionForGuild(state.raidId.value, guildId, guildLevel, static_cast<uint8_t>(state.bossStates.size()));
+	} else {
+		state.lockoutState = RaidLockoutState::None;
+		state.lockoutExpirationTick = 0;
 	}
-	const uint32_t weekTickSpan = 7U * 24U * 60U * 60U * 1000U;
-	const uint32_t currentWeek = lockoutExpirationTick / weekTickSpan;
-	const uint16_t clearDurationSeconds = static_cast<uint16_t>(std::min<uint32_t>(std::numeric_limits<uint16_t>::max(), state.timersMs[0] / 1000U));
-	RecordRaidDungeonClear(state.raidId.value, state.difficulty, guildId, guildLevel, static_cast<uint8_t>(state.bossStates.size()), clearDurationSeconds, participantIds, currentWeek);
-	SetRaidLockoutForWeek(state.difficulty, currentWeek);
 	BumpRevision(state);
 	return true;
 }
@@ -121,10 +115,13 @@ bool FailRaid(RaidInstanceState &state, uint32_t lockoutExpirationTick)
 		return false;
 
 	state.phase = RaidPhase::Failed;
-	state.lockoutState = RaidLockoutState::Active;
-	state.lockoutExpirationTick = lockoutExpirationTick;
-	const uint32_t weekTickSpan = 7U * 24U * 60U * 60U * 1000U;
-	SetRaidLockoutForWeek(state.difficulty, lockoutExpirationTick / weekTickSpan);
+	if (GetOptions().Gameplay.phaseGRaidProgressionRewards) {
+		state.lockoutState = RaidLockoutState::Active;
+		state.lockoutExpirationTick = lockoutExpirationTick;
+	} else {
+		state.lockoutState = RaidLockoutState::None;
+		state.lockoutExpirationTick = 0;
+	}
 	BumpRevision(state);
 	return true;
 }
