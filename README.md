@@ -22,34 +22,42 @@ Check out the [manual](https://github.com/diasurgical/devilutionX/wiki) for avai
 
 For a full list of changes, see our [changelog](docs/CHANGELOG.md).
 
-# What this fork adds
+## Roadmap
 
-This fork extends DevilutionX with multiplayer-focused systems for raids, guild progression, rollback-aware synchronization, and network telemetry tooling for debugging and live iteration.
+This roadmap tracks fork-specific features and the delivery targets needed to ship them safely.
 
-- **Raid gameplay loop**: Party raid state, sync, and progression logic designed for repeatable group encounters.
-- **Guild progression**: Shared progression structures that track account/group advancement over time.
-- **Rollback state management**: Deterministic multiplayer recovery/state rewind scaffolding for desync resilience.
-- **Net telemetry**: Instrumentation and traces for network behavior, rollback diagnostics, and protocol tuning.
+**Approval flow for every roadmap item:** idea ➜ RFC issue ➜ prototype PR ➜ integration PR.
 
-# Repo map
+### Raid Content Pipeline ([docs/raid/](docs/raid/))
+- Define a deterministic encounter script schema and ship `>= 20` validation tests across boss phases, loot tables, and fail states.
+- Add a raid content compiler with lint gates that blocks merges on schema violations and keeps compile time under `2 minutes` for a full raid bundle.
+- Deliver reusable encounter simulation tooling that can replay `1,000+` scripted runs with identical outcomes across two consecutive CI jobs.
+- Publish a content authoring checklist and reference templates to reduce first-pass review comments by `30%` over two milestones.
 
-- `Source/raid` - Raid state, raid progression, protocol helpers, and raid runtime logic.
-- `Source/guild` - Guild progression models and related progression handling.
-- `Source/dvlnet` - Multiplayer transport, rollback state, and telemetry integration points.
-- `test` - Unit/integration tests, including raid, rollback, and telemetry coverage.
-- `docs` - Contributor, build, and project documentation.
-- `CMake` - Build configuration modules and platform/toolchain setup.
-- `Packaging` - Packaging scripts and assets for release targets.
+### Guild Economy & Rewards ([docs/guild-economy/](docs/guild-economy/))
+- Introduce guild treasury transaction types with invariant checks that keep ledger drift at `0` in nightly audit tests.
+- Implement weekly reward distribution rules with automated tests covering `100%` of payout branches and edge cases (join/leave mid-cycle, ties, inactivity).
+- Add anti-inflation sinks and balancing telemetry, targeting a monthly net currency delta within `±5%` of design forecast.
+- Provide guild progression dashboards and event exports so admins can reconcile reward outcomes in under `10 minutes` per cycle.
 
-# Multiplayer, raids, and progression (fork focus)
+### Netcode Reliability ([docs/netcode/](docs/netcode/))
+- Add end-to-end deterministic state-sync tests for high-latency scenarios (`150ms`, `250ms`, `400ms`) with a desync rate target below `0.1%`.
+- Implement packet loss recovery and resend backoff, reducing disconnects from simulated `5%` packet loss sessions by `>= 40%`.
+- Ship host migration smoke coverage that completes reconnection in under `8 seconds` for `90%` of test sessions.
+- Add protocol compatibility checks and wire-version docs to guarantee backward compatibility across one minor version.
 
-Core fork-specific implementation files include:
+### Observability & Ops ([docs/ops/](docs/ops/))
+- Instrument structured gameplay/network logs with trace IDs, achieving `>= 95%` coverage on critical multiplayer paths.
+- Build service-level dashboards (latency, disconnects, desyncs, crash-free sessions) with alert thresholds tied to release gates.
+- Add on-demand diagnostics bundles that capture logs/config/runtime metadata and cut triage-to-root-cause time by `50%`.
+- Document incident response runbooks and on-call escalation paths with quarterly drill completion tracked in `docs/ops/`.
 
-- `Source/raid/raid_state.hpp` and `Source/raid/raid_state.cpp`
-- `Source/raid/raid_progression.hpp` and `Source/raid/raid_progression.cpp`
-- `Source/guild/guild_progression.hpp` and `Source/guild/guild_progression.cpp`
-- `Source/dvlnet/rollback_state.hpp` and `Source/dvlnet/rollback_state.cpp`
-- `Source/dvlnet/net_telemetry.hpp` and `Source/dvlnet/net_telemetry.cpp`
+### Modding API ([docs/modding-api/](docs/modding-api/))
+- Publish a versioned API surface map and semantic compatibility policy, with CI checks blocking undocumented public API changes.
+- Deliver sandboxed script hooks for combat, loot, and events, including performance budgets (`< 1ms` average hook overhead per tick).
+- Add an integration test suite of `25+` canonical mods to validate API behavior across patch upgrades.
+- Provide starter mod templates and packaging docs that reduce new-mod setup time to under `15 minutes` for first-time contributors.
+
 
 # How to Install
 
