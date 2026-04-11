@@ -16,9 +16,10 @@ set(libdevilutionx_SRCS
   gmenu.cpp
   guild/guild.cpp
   guild/guild_progression.cpp
-  raid/raid.cpp
-  raid/raid_progression.cpp
+  raid/raid_rules.cpp
+  raid/raid_state.cpp
   raid/raid_routing.cpp
+  raid/encounter/encounter_engine.cpp
   help.cpp
   hwcursor.cpp
   interfac.cpp
