@@ -12,6 +12,7 @@ namespace devilution {
 namespace {
 
 RaidInstanceState ActiveRaid {};
+RaidLobbyUiState ActiveRaidLobbyUi {};
 
 bool IsJoinablePhase(RaidPhase phase)
 {
@@ -143,6 +144,7 @@ void ResetRaid(RaidInstanceState &state, uint32_t newInstanceSeed)
 void ResetActiveRaidState()
 {
 	ActiveRaid = {};
+	ActiveRaidLobbyUi = {};
 }
 
 RaidInstanceState GetActiveRaidState()
@@ -153,6 +155,16 @@ RaidInstanceState GetActiveRaidState()
 void ApplyActiveRaidStateSnapshot(const RaidInstanceState &state)
 {
 	ActiveRaid = state;
+}
+
+RaidLobbyUiState GetActiveRaidLobbyUiState()
+{
+	return ActiveRaidLobbyUi;
+}
+
+void ApplyActiveRaidLobbyUiState(const RaidLobbyUiState &state)
+{
+	ActiveRaidLobbyUi = state;
 }
 
 } // namespace devilution
