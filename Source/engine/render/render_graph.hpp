@@ -32,6 +32,9 @@ public:
 
 	[[nodiscard]] bool Execute()
 	{
+		if (!Validate())
+			return false;
+
 		orderedPasses_.clear();
 		std::array<uint8_t, 3> state {}; // 0=unvisited, 1=visiting, 2=visited
 		for (const RenderPassNode &pass : passes_) {
@@ -44,6 +47,21 @@ public:
 			if (pass != nullptr && pass->execute)
 				pass->execute();
 		}
+		return true;
+	}
+
+	[[nodiscard]] bool Validate() const
+	{
+		if (HasDuplicatePasses())
+			return false;
+
+		for (const RenderPassNode &pass : passes_) {
+			for (RenderPassId dependency : pass.dependsOn) {
+				if (FindPass(dependency) == nullptr)
+					return false;
+			}
+		}
+
 		return true;
 	}
 
@@ -94,6 +112,18 @@ private:
 		state[index] = 2;
 		orderedPasses_.push_back(id);
 		return true;
+	}
+
+	[[nodiscard]] bool HasDuplicatePasses() const
+	{
+		std::array<uint8_t, 3> passCount {};
+		for (const RenderPassNode &pass : passes_) {
+			const size_t index = ToIndex(pass.id);
+			passCount[index]++;
+			if (passCount[index] > 1)
+				return true;
+		}
+		return false;
 	}
 
 	std::vector<RenderPassNode> passes_;

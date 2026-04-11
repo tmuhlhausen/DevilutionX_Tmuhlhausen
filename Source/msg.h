@@ -467,6 +467,10 @@ enum _cmd_id : uint8_t {
 	//
 	// body (TCmdRaidAction)
 	CMD_RAID_READY_TOGGLE,
+	// Host-authoritative ready request.
+	//
+	// body (TCmdRaidAction)
+	CMD_RAID_READY,
 	// Host-authoritative raid start request.
 	//
 	// body (TCmdRaidAction)
@@ -483,6 +487,14 @@ enum _cmd_id : uint8_t {
 	//
 	// body (TCmdRaidState)
 	CMD_RAID_STATE_SYNC,
+	// Compact authoritative raid snapshot synchronization.
+	//
+	// body (TCmdRaidSnapshot)
+	CMD_RAID_SNAPSHOT,
+	// Host-authoritative raid reset request.
+	//
+	// body (TCmdRaidAction)
+	CMD_RAID_RESET,
 	// Fake command; set current player for succeeding mega pkt buffer messages.
 	//
 	// body (TFakeCmdPlr)
@@ -627,8 +639,11 @@ struct TCmdRaidState {
 	uint8_t difficulty;
 	uint8_t phase;
 	uint8_t lockoutState;
-	uint8_t reserved;
+	uint8_t attemptsLeft;
 	uint32_t instanceSeed;
+	uint32_t joinedMask;
+	uint32_t readyMask;
+	uint8_t roleSlots[4];
 	uint8_t bossStates[MaxRaidBosses];
 	uint64_t objectiveBits;
 	uint32_t timersMs[MaxRaidTimers];
@@ -649,6 +664,24 @@ struct TCmdRaidEvent {
 	uint32_t expectedVersion;
 	uint32_t sequence;
 	uint8_t payload[MaxRaidEventPayload];
+};
+
+struct TCmdRaidSnapshot {
+	_cmd_id bCmd;
+	uint32_t raidId;
+	uint32_t expectedVersion;
+	uint32_t snapshotRevision;
+	uint32_t sequence;
+	uint64_t objectiveBits;
+	uint8_t difficulty;
+	uint8_t phase;
+	uint8_t lockoutState;
+	uint8_t bossCount;
+	uint8_t timerCount;
+	uint8_t flags;
+	uint8_t bossStates[MaxRaidBosses];
+	uint16_t timersSeconds[MaxRaidTimers];
+	uint16_t lockoutSecondsRemaining;
 };
 
 struct TCmdQuest {
@@ -906,9 +939,12 @@ void NetSendCmdRaidInvite(bool bHiPri, uint32_t raidId, uint8_t targetPlayerId, 
 void NetSendCmdRaidJoin(bool bHiPri, uint32_t raidId, uint32_t expectedVersion, uint32_t sequence = 0);
 void NetSendCmdRaidLeave(bool bHiPri, uint32_t raidId, uint32_t expectedVersion, uint32_t sequence = 0);
 void NetSendCmdRaidReadyToggle(bool bHiPri, uint32_t raidId, uint32_t expectedVersion, uint32_t sequence = 0);
+void NetSendCmdRaidReady(bool bHiPri, uint32_t raidId, uint32_t expectedVersion, uint32_t sequence = 0);
 void NetSendCmdRaidStart(bool bHiPri, uint32_t raidId, uint32_t expectedVersion, uint32_t sequence = 0);
 void NetSendCmdRaidEvent(bool bHiPri, uint32_t raidId, uint8_t encounterIndex, RaidEncounterState state, uint64_t objectiveBitsToSet, const std::array<uint32_t, MaxRaidTimers> &timersMs, bool updateTimers, uint32_t expectedVersion, uint32_t sequence = 0);
 void NetSendCmdRaidCheckpoint(bool bHiPri, uint32_t raidId, uint8_t encounterIndex, RaidEncounterState state, uint64_t objectiveBitsToSet, const std::array<uint32_t, MaxRaidTimers> &timersMs, bool updateTimers, uint32_t expectedVersion, uint32_t sequence = 0);
+void NetSendCmdRaidSnapshot(bool bHiPri, const RaidInstanceState &state, uint32_t expectedVersion, uint32_t sequence = 0);
+void NetSendCmdRaidReset(bool bHiPri, uint32_t raidId, uint32_t expectedVersion, uint32_t sequence = 0);
 void delta_close_portal(const Player &player);
 bool ValidateCmdSize(size_t requiredCmdSize, size_t maxCmdSize, size_t playerId);
 size_t ParseCmd(uint8_t pnum, const TCmd *pCmd, size_t maxCmdSize);

@@ -1,8 +1,10 @@
 #include "raid/raid.hpp"
 
 #include <algorithm>
+#include <limits>
+#include <vector>
 
-#include "guild/guild_progression.hpp"
+#include "raid/raid_progression.hpp"
 #include "levels/gendung.h"
 #include "options.h"
 #include "player.h"
@@ -11,6 +13,7 @@ namespace devilution {
 namespace {
 
 RaidInstanceState ActiveRaid {};
+RaidLobbyUiState ActiveRaidLobbyUi {};
 
 bool IsJoinablePhase(RaidPhase phase)
 {
@@ -138,6 +141,7 @@ void ResetRaid(RaidInstanceState &state, uint32_t newInstanceSeed)
 void ResetActiveRaidState()
 {
 	ActiveRaid = {};
+	ActiveRaidLobbyUi = {};
 }
 
 RaidInstanceState GetActiveRaidState()
@@ -148,6 +152,16 @@ RaidInstanceState GetActiveRaidState()
 void ApplyActiveRaidStateSnapshot(const RaidInstanceState &state)
 {
 	ActiveRaid = state;
+}
+
+RaidLobbyUiState GetActiveRaidLobbyUiState()
+{
+	return ActiveRaidLobbyUi;
+}
+
+void ApplyActiveRaidLobbyUiState(const RaidLobbyUiState &state)
+{
+	ActiveRaidLobbyUi = state;
 }
 
 } // namespace devilution
