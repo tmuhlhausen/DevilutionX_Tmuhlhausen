@@ -42,6 +42,7 @@
 #include "diablo.h"
 #include "diablo_msg.hpp"
 #include "discord/discord.h"
+#include "dvlnet/net_telemetry.hpp"
 #include "dvlnet/net_transport_mode.hpp"
 #include "doom.h"
 #include "encrypt.h"
@@ -964,6 +965,7 @@ void RunGameLoop(interface_mode uMsg)
 		if (game_loop(gbGameLoopStartup))
 			diablo_color_cyc_logic();
 		if (*GetOptions().Network.rollback) {
+			const uint32_t rollbackStart = SDL_GetTicks();
 			uint32_t simStateHash = 2166136261u;
 			for (const Player &player : Players) {
 				if (!player.isActive())
@@ -980,6 +982,7 @@ void RunGameLoop(interface_mode uMsg)
 				simStateHash *= 16777619u;
 			}
 			nthread_RecordSimStateHash(simStateHash);
+			GetNetTelemetryAggregator().RecordRollbackMs(static_cast<float>(SDL_GetTicks() - rollbackStart));
 		}
 		gbGameLoopStartup = false;
 		if (drawGame)
@@ -2211,6 +2214,16 @@ void InitKeymapActions()
 	    },
 	    nullptr,
 	    CanPlayerTakeAction);
+	options.Keymapper.AddAction(
+	    "ToggleNetworkDebugOverlay",
+	    N_("Toggle network debug overlay"),
+	    N_("Shows or hides rolling transport and rollback telemetry."),
+	    SDLK_UNKNOWN,
+	    [] {
+		    GetOptions().Network.netDebugOverlay.SetValue(!*GetOptions().Network.netDebugOverlay);
+	    },
+	    nullptr,
+	    IsGameRunning);
 	options.Keymapper.AddAction(
 	    "ChatLog",
 	    N_("Chat Log"),

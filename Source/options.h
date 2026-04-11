@@ -703,6 +703,10 @@ struct NetworkOptions : OptionCategoryBase {
 	OptionEntryInt<int> chaosReorderWindow;
 	/** @brief Chaos injector deterministic seed for simulation transport. */
 	OptionEntryInt<int> chaosSeed;
+	/** @brief Emit per-tick network telemetry trace file. */
+	OptionEntryBoolean netTraceEnabled;
+	/** @brief Show rolling per-tick network telemetry overlay. */
+	OptionEntryBoolean netDebugOverlay;
 };
 
 struct ChatOptions : OptionCategoryBase {
