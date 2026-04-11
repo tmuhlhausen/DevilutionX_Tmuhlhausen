@@ -53,6 +53,9 @@ set(tests
   raid_progression_test
   raid_sync_test
   rollback_state_test
+  encounter_schema_test
+  encounter_engine_phase_test
+  weekly_modifier_test
 )
 set(standalone_tests
   codec_test
