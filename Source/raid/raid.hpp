@@ -1,8 +1,8 @@
 #pragma once
 
-#include <array>
-#include <cstddef>
-#include <cstdint>
+#include "raid/raid_rules.hpp"
+#include "raid/raid_state.hpp"
+#include "raid/raid_types.hpp"
 
 namespace devilution {
 

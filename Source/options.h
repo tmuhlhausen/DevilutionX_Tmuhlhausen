@@ -650,8 +650,12 @@ struct GameplayOptions : OptionCategoryBase {
 	OptionEntryBoolean phaseCGuildCoreProtocol;
 	/** @brief Enable guild halls/maps and endgame integration (Phase D). */
 	OptionEntryBoolean phaseDGuildHallsEndgame;
-	/** @brief Enable balance pass and anti-cheat hardening (Phase E). */
-	OptionEntryBoolean phaseEBalanceAntiCheat;
+	/** @brief Enable raid state/protocol core scaffolding (Phase E). */
+	OptionEntryBoolean phaseERaidCore;
+	/** @brief Enable raid encounters and lobby flow (Phase F). */
+	OptionEntryBoolean phaseFRaidEncounters;
+	/** @brief Enable raid progression rewards and lockouts (Phase G). */
+	OptionEntryBoolean phaseGRaidProgressionRewards;
 	/** @brief Require deterministic multiplayer item recreation checks before default-on rollout. */
 	OptionEntryBoolean requireDeterministicMultiplayerItemRecreation;
 
@@ -703,6 +707,10 @@ struct NetworkOptions : OptionCategoryBase {
 	OptionEntryInt<int> chaosReorderWindow;
 	/** @brief Chaos injector deterministic seed for simulation transport. */
 	OptionEntryInt<int> chaosSeed;
+	/** @brief Emit per-tick network telemetry trace file. */
+	OptionEntryBoolean netTraceEnabled;
+	/** @brief Show rolling per-tick network telemetry overlay. */
+	OptionEntryBoolean netDebugOverlay;
 };
 
 struct ChatOptions : OptionCategoryBase {

@@ -12,13 +12,26 @@ set(libdevilutionx_SRCS
   diablo.cpp
   diablo_msg.cpp
   doom.cpp
+<<<<<<< HEAD
   gamemenu.cpp
   gmenu.cpp
   guild/guild.cpp
   guild/guild_progression.cpp
   raid/raid.cpp
+  raid/raid_progression.cpp
   raid/raid_routing.cpp
   help.cpp
+=======
+  gamemenu.cpp
+  gmenu.cpp
+  guild/guild.cpp
+  guild/guild_progression.cpp
+  raid/raid_rules.cpp
+  raid/raid_state.cpp
+  raid/raid_routing.cpp
+  raid/encounter/encounter_engine.cpp
+  help.cpp
+>>>>>>> 3301c89f03f0b15060346f87f85e4004c44c290f
   hwcursor.cpp
   interfac.cpp
   inv.cpp
@@ -81,6 +94,7 @@ set(libdevilutionx_SRCS
   dvlnet/frame_queue.cpp
   dvlnet/loopback.cpp
   dvlnet/packet.cpp
+  dvlnet/udp_transport.cpp
 
   engine/actor_position.cpp
   engine/animationinfo.cpp
@@ -92,6 +106,7 @@ set(libdevilutionx_SRCS
   engine/trn.cpp
 
   engine/render/automap_render.cpp
+  engine/render/render_backend.cpp
   engine/render/scrollrt.cpp
 
   items/validation.cpp

@@ -34,6 +34,7 @@
 #include "config.h"
 #include "control/control.hpp"
 #include "dead.h"
+#include "dvlnet/rollback_state.hpp"
 #include "engine/backbuffer_state.hpp"
 #include "engine/random.hpp"
 #include "engine/world_tile.hpp"
@@ -212,10 +213,13 @@ std::string_view CmdIdString(_cmd_id cmd)
 	case CMD_RAID_JOIN: return "CMD_RAID_JOIN";
 	case CMD_RAID_LEAVE: return "CMD_RAID_LEAVE";
 	case CMD_RAID_READY_TOGGLE: return "CMD_RAID_READY_TOGGLE";
+	case CMD_RAID_READY: return "CMD_RAID_READY";
 	case CMD_RAID_START: return "CMD_RAID_START";
 	case CMD_RAID_EVENT: return "CMD_RAID_EVENT";
 	case CMD_RAID_CHECKPOINT: return "CMD_RAID_CHECKPOINT";
 	case CMD_RAID_STATE_SYNC: return "CMD_RAID_STATE_SYNC";
+	case CMD_RAID_SNAPSHOT: return "CMD_RAID_SNAPSHOT";
+	case CMD_RAID_RESET: return "CMD_RAID_RESET";
 	case FAKE_CMD_SETID: return "FAKE_CMD_SETID";
 	case FAKE_CMD_DROPID: return "FAKE_CMD_DROPID";
 	case CMD_INVALID: return "CMD_INVALID";
@@ -298,9 +302,12 @@ constexpr uint8_t GuildMultiplayerBuckets = 32;
 constexpr uint8_t GuildSetLevelsCount = 2;
 constexpr uint8_t GuildMultiplayerBase = NUMLEVELS + SL_LAST + 1;
 constexpr uint8_t RaidMultiplayerBase = GuildMultiplayerBase + GuildMultiplayerBuckets * GuildSetLevelsCount;
+constexpr uint8_t MaxActiveRaidInstances = GetMaxActiveRaidInstances(RaidMultiplayerBase);
+constexpr size_t RaidMultiplayerLevelSpan = GetRaidMultiplayerLevelSpan(RaidMultiplayerBase);
 constexpr size_t MaxMultiplayerLevels = RaidMultiplayerBase + RaidMultiplayerLevelSpan - 1;
 constexpr size_t MaxChunks = MaxMultiplayerLevels + 4;
 static_assert(MaxMultiplayerLevels <= std::numeric_limits<uint8_t>::max(), "Multiplayer level routing exceeds uint8_t storage.");
+static_assert(MaxActiveRaidInstances > 0, "Raid multiplayer base leaves no routing room.");
 
 uint32_t sgdwOwnerWait;
 uint32_t sgdwRecvOffset;
@@ -3422,8 +3429,28 @@ uint8_t GetLevelForMultiplayer(const Player &player)
 		}
 
 		const RaidInstanceState raid = GetActiveRaidState();
-		if (raid.raidId.IsValid() && IsArenaLevel(setLevel))
-			return ComputeRaidMultiplayerLevel(raid.raidId.value, player.plrlevel, RaidMultiplayerBase);
+		if (raid.raidId.IsValid() && IsArenaLevel(setLevel)) {
+			const auto routing = ComputeRaidMultiplayerLevel(ActiveGuildId, raid.raidId.value, player.plrlevel, raid.reservedNetSync, RaidMultiplayerBase);
+			if (!routing.IsDenied())
+				return routing.level;
+
+			if (&player == MyPlayer) {
+				switch (routing.denialReason) {
+				case RaidRoutingDenialReason::InstanceCapacityExceeded:
+					EventPlrMsg(_("Raid shard overflow. Instance routing denied."));
+					break;
+				case RaidRoutingDenialReason::BaseOutOfRange:
+					EventPlrMsg(_("Raid routing table exhausted. Entry denied."));
+					break;
+				case RaidRoutingDenialReason::InvalidRaidId:
+					EventPlrMsg(_("Raid state unavailable. Entry denied."));
+					break;
+				case RaidRoutingDenialReason::None:
+					break;
+				}
+			}
+			return GetLevelForMultiplayer(player.plrlevel, player.plrIsOnSetLevel);
+		}
 	}
 	return GetLevelForMultiplayer(player.plrlevel, player.plrIsOnSetLevel);
 }
@@ -3435,8 +3462,7 @@ bool IsValidLevelForMultiplayer(uint8_t level)
 	//   - guild buckets for guild hall/map set levels
 	//   - raid instance routes (raidId + encounter/floor slot)
 	//
-	// Raid routing caps active instance buckets to MaxActiveRaidInstances and
-	// normalizes encounter index with modulo, ensuring deterministic overflow.
+	// Raid routing caps active instance buckets to fit in the uint8 level space.
 	return level <= MaxMultiplayerLevels;
 }
 
@@ -3470,6 +3496,15 @@ void DeltaLoadLevel()
 	DeltaLoadItems(deltaLevel);
 }
 
+void PredictLocalInput(const void *cmdData, size_t cmdSize)
+{
+	if (!*GetOptions().Network.rollback)
+		return;
+	const auto *bytes = static_cast<const std::byte *>(cmdData);
+	dvlnet::GetRollbackState().QueuePredictedInput(SimTickCount + 1, { bytes, cmdSize });
+	ParseCmd(MyPlayerId, reinterpret_cast<const TCmd *>(cmdData), cmdSize);
+}
+
 void NetSendCmd(bool bHiPri, _cmd_id bCmd)
 {
 	TCmd cmd;
@@ -3479,6 +3514,7 @@ void NetSendCmd(bool bHiPri, _cmd_id bCmd)
 		NetSendHiPri(MyPlayerId, reinterpret_cast<std::byte *>(&cmd), sizeof(cmd));
 	else
 		NetSendLoPri(MyPlayerId, reinterpret_cast<std::byte *>(&cmd), sizeof(cmd));
+	PredictLocalInput(&cmd, sizeof(cmd));
 }
 
 void NetSendCmdSpawnMonster(Point position, Direction dir, uint16_t typeIndex, uint16_t monsterId, uint32_t seed, uint8_t golemOwnerPlayerId, uint8_t golemSpellLevel)
@@ -3495,6 +3531,7 @@ void NetSendCmdSpawnMonster(Point position, Direction dir, uint16_t typeIndex, u
 	cmd.golemOwnerPlayerId = golemOwnerPlayerId;
 	cmd.golemSpellLevel = golemSpellLevel;
 	NetSendHiPri(MyPlayerId, reinterpret_cast<std::byte *>(&cmd), sizeof(cmd));
+	PredictLocalInput(&cmd, sizeof(cmd));
 }
 
 void NetSendCmdLoc(uint8_t playerId, bool bHiPri, _cmd_id bCmd, Point position)
@@ -3511,6 +3548,8 @@ void NetSendCmdLoc(uint8_t playerId, bool bHiPri, _cmd_id bCmd, Point position)
 		NetSendHiPri(playerId, reinterpret_cast<std::byte *>(&cmd), sizeof(cmd));
 	else
 		NetSendLoPri(playerId, reinterpret_cast<std::byte *>(&cmd), sizeof(cmd));
+	if (playerId == MyPlayerId)
+		PredictLocalInput(&cmd, sizeof(cmd));
 
 	MyPlayer->UpdatePreviewCelSprite(bCmd, position, 0, 0);
 }
@@ -3530,6 +3569,7 @@ void NetSendCmdLocParam1(bool bHiPri, _cmd_id bCmd, Point position, uint16_t wPa
 		NetSendHiPri(MyPlayerId, reinterpret_cast<std::byte *>(&cmd), sizeof(cmd));
 	else
 		NetSendLoPri(MyPlayerId, reinterpret_cast<std::byte *>(&cmd), sizeof(cmd));
+	PredictLocalInput(&cmd, sizeof(cmd));
 
 	MyPlayer->UpdatePreviewCelSprite(bCmd, position, wParam1, 0);
 }
@@ -3550,6 +3590,7 @@ void NetSendCmdLocParam2(bool bHiPri, _cmd_id bCmd, Point position, uint16_t wPa
 		NetSendHiPri(MyPlayerId, reinterpret_cast<std::byte *>(&cmd), sizeof(cmd));
 	else
 		NetSendLoPri(MyPlayerId, reinterpret_cast<std::byte *>(&cmd), sizeof(cmd));
+	PredictLocalInput(&cmd, sizeof(cmd));
 
 	MyPlayer->UpdatePreviewCelSprite(bCmd, position, wParam1, wParam2);
 }
@@ -3571,6 +3612,7 @@ void NetSendCmdLocParam3(bool bHiPri, _cmd_id bCmd, Point position, uint16_t wPa
 		NetSendHiPri(MyPlayerId, reinterpret_cast<std::byte *>(&cmd), sizeof(cmd));
 	else
 		NetSendLoPri(MyPlayerId, reinterpret_cast<std::byte *>(&cmd), sizeof(cmd));
+	PredictLocalInput(&cmd, sizeof(cmd));
 
 	MyPlayer->UpdatePreviewCelSprite(bCmd, position, wParam1, wParam2);
 }
@@ -3593,6 +3635,7 @@ void NetSendCmdLocParam4(bool bHiPri, _cmd_id bCmd, Point position, uint16_t wPa
 		NetSendHiPri(MyPlayerId, reinterpret_cast<std::byte *>(&cmd), sizeof(cmd));
 	else
 		NetSendLoPri(MyPlayerId, reinterpret_cast<std::byte *>(&cmd), sizeof(cmd));
+	PredictLocalInput(&cmd, sizeof(cmd));
 
 	MyPlayer->UpdatePreviewCelSprite(bCmd, position, wParam1, wParam3);
 }
@@ -3610,6 +3653,7 @@ void NetSendCmdParam1(bool bHiPri, _cmd_id bCmd, uint16_t wParam1)
 		NetSendHiPri(MyPlayerId, reinterpret_cast<std::byte *>(&cmd), sizeof(cmd));
 	else
 		NetSendLoPri(MyPlayerId, reinterpret_cast<std::byte *>(&cmd), sizeof(cmd));
+	PredictLocalInput(&cmd, sizeof(cmd));
 
 	MyPlayer->UpdatePreviewCelSprite(bCmd, {}, wParam1, 0);
 }
@@ -3625,6 +3669,7 @@ void NetSendCmdParam2(bool bHiPri, _cmd_id bCmd, uint16_t wParam1, uint16_t wPar
 		NetSendHiPri(MyPlayerId, reinterpret_cast<std::byte *>(&cmd), sizeof(cmd));
 	else
 		NetSendLoPri(MyPlayerId, reinterpret_cast<std::byte *>(&cmd), sizeof(cmd));
+	PredictLocalInput(&cmd, sizeof(cmd));
 }
 
 void NetSendCmdParam4(bool bHiPri, _cmd_id bCmd, uint16_t wParam1, uint16_t wParam2, uint16_t wParam3, uint16_t wParam4)
@@ -3883,6 +3928,8 @@ void NetSendCmdGuildKick(bool bHiPri, uint8_t targetPlayerId)
 
 void NetSendCmdRaidCreate(bool bHiPri, uint32_t raidId, RaidDifficulty difficulty, uint32_t expectedVersion, uint32_t sequence)
 {
+	if (!IsRaidProtocolEnabled())
+		return;
 	TCmdRaidAction cmd {};
 	cmd.bCmd = CMD_RAID_CREATE;
 	cmd.actorPlayerId = MyPlayerId;
@@ -3899,6 +3946,8 @@ void NetSendCmdRaidCreate(bool bHiPri, uint32_t raidId, RaidDifficulty difficult
 
 void NetSendCmdRaidInvite(bool bHiPri, uint32_t raidId, uint8_t targetPlayerId, uint32_t expectedVersion, uint32_t sequence)
 {
+	if (!IsRaidProtocolEnabled())
+		return;
 	TCmdRaidAction cmd {};
 	cmd.bCmd = CMD_RAID_INVITE;
 	cmd.actorPlayerId = MyPlayerId;
@@ -3914,6 +3963,8 @@ void NetSendCmdRaidInvite(bool bHiPri, uint32_t raidId, uint8_t targetPlayerId, 
 
 void NetSendCmdRaidJoin(bool bHiPri, uint32_t raidId, uint32_t expectedVersion, uint32_t sequence)
 {
+	if (!IsRaidProtocolEnabled())
+		return;
 	TCmdRaidAction cmd {};
 	cmd.bCmd = CMD_RAID_JOIN;
 	cmd.actorPlayerId = MyPlayerId;
@@ -3929,6 +3980,8 @@ void NetSendCmdRaidJoin(bool bHiPri, uint32_t raidId, uint32_t expectedVersion, 
 
 void NetSendCmdRaidLeave(bool bHiPri, uint32_t raidId, uint32_t expectedVersion, uint32_t sequence)
 {
+	if (!IsRaidProtocolEnabled())
+		return;
 	TCmdRaidAction cmd {};
 	cmd.bCmd = CMD_RAID_LEAVE;
 	cmd.actorPlayerId = MyPlayerId;
@@ -3944,6 +3997,8 @@ void NetSendCmdRaidLeave(bool bHiPri, uint32_t raidId, uint32_t expectedVersion,
 
 void NetSendCmdRaidReadyToggle(bool bHiPri, uint32_t raidId, uint32_t expectedVersion, uint32_t sequence)
 {
+	if (!IsRaidProtocolEnabled())
+		return;
 	TCmdRaidAction cmd {};
 	cmd.bCmd = CMD_RAID_READY_TOGGLE;
 	cmd.actorPlayerId = MyPlayerId;
@@ -3957,8 +4012,27 @@ void NetSendCmdRaidReadyToggle(bool bHiPri, uint32_t raidId, uint32_t expectedVe
 		NetSendLoPri(MyPlayerId, reinterpret_cast<std::byte *>(&cmd), sizeof(cmd));
 }
 
+void NetSendCmdRaidReady(bool bHiPri, uint32_t raidId, uint32_t expectedVersion, uint32_t sequence)
+{
+	if (!IsRaidProtocolEnabled())
+		return;
+	TCmdRaidAction cmd {};
+	cmd.bCmd = CMD_RAID_READY;
+	cmd.actorPlayerId = MyPlayerId;
+	cmd.targetPlayerId = MyPlayerId;
+	cmd.raidId = Swap32LE(raidId);
+	cmd.sequence = Swap32LE(sequence);
+	cmd.expectedVersion = Swap32LE(expectedVersion);
+	if (bHiPri)
+		NetSendHiPri(MyPlayerId, reinterpret_cast<std::byte *>(&cmd), sizeof(cmd));
+	else
+		NetSendLoPri(MyPlayerId, reinterpret_cast<std::byte *>(&cmd), sizeof(cmd));
+}
+
 void NetSendCmdRaidStart(bool bHiPri, uint32_t raidId, uint32_t expectedVersion, uint32_t sequence)
 {
+	if (!IsRaidProtocolEnabled())
+		return;
 	TCmdRaidAction cmd {};
 	cmd.bCmd = CMD_RAID_START;
 	cmd.actorPlayerId = MyPlayerId;
@@ -3974,6 +4048,8 @@ void NetSendCmdRaidStart(bool bHiPri, uint32_t raidId, uint32_t expectedVersion,
 
 void NetSendCmdRaidEvent(bool bHiPri, uint32_t raidId, uint8_t encounterIndex, RaidEncounterState state, uint64_t objectiveBitsToSet, const std::array<uint32_t, MaxRaidTimers> &timersMs, bool updateTimers, uint32_t expectedVersion, uint32_t sequence)
 {
+	if (!IsRaidProtocolEnabled())
+		return;
 	TCmdRaidEvent cmd {};
 	cmd.bCmd = CMD_RAID_EVENT;
 	cmd.raidId = Swap32LE(raidId);
@@ -3993,6 +4069,8 @@ void NetSendCmdRaidEvent(bool bHiPri, uint32_t raidId, uint8_t encounterIndex, R
 
 void NetSendCmdRaidCheckpoint(bool bHiPri, uint32_t raidId, uint8_t encounterIndex, RaidEncounterState state, uint64_t objectiveBitsToSet, const std::array<uint32_t, MaxRaidTimers> &timersMs, bool updateTimers, uint32_t expectedVersion, uint32_t sequence)
 {
+	if (!IsRaidProtocolEnabled())
+		return;
 	TCmdRaidEvent cmd {};
 	cmd.bCmd = CMD_RAID_CHECKPOINT;
 	cmd.raidId = Swap32LE(raidId);
@@ -4004,6 +4082,52 @@ void NetSendCmdRaidCheckpoint(bool bHiPri, uint32_t raidId, uint8_t encounterInd
 		cmd.timersMs[i] = Swap32LE(timersMs[i]);
 	cmd.expectedVersion = Swap32LE(expectedVersion);
 	cmd.sequence = Swap32LE(sequence);
+	if (bHiPri)
+		NetSendHiPri(MyPlayerId, reinterpret_cast<std::byte *>(&cmd), sizeof(cmd));
+	else
+		NetSendLoPri(MyPlayerId, reinterpret_cast<std::byte *>(&cmd), sizeof(cmd));
+}
+
+void NetSendCmdRaidSnapshot(bool bHiPri, const RaidInstanceState &state, uint32_t expectedVersion, uint32_t sequence)
+{
+	if (!IsRaidProtocolEnabled())
+		return;
+	TCmdRaidSnapshot cmd {};
+	cmd.bCmd = CMD_RAID_SNAPSHOT;
+	cmd.raidId = Swap32LE(state.raidId.value);
+	cmd.expectedVersion = Swap32LE(expectedVersion);
+	cmd.snapshotRevision = Swap32LE(state.snapshotRevision);
+	cmd.sequence = Swap32LE(sequence);
+	cmd.objectiveBits = Swap64LE(state.objectiveBits);
+	cmd.difficulty = static_cast<uint8_t>(state.difficulty);
+	cmd.phase = static_cast<uint8_t>(state.phase);
+	cmd.lockoutState = static_cast<uint8_t>(state.lockoutState);
+	cmd.bossCount = static_cast<uint8_t>(state.bossStates.size());
+	cmd.timerCount = static_cast<uint8_t>(state.timersMs.size());
+	for (size_t i = 0; i < state.bossStates.size(); i++)
+		cmd.bossStates[i] = static_cast<uint8_t>(state.bossStates[i]);
+	for (size_t i = 0; i < state.timersMs.size(); i++)
+		cmd.timersSeconds[i] = Swap16LE(static_cast<uint16_t>(std::min(state.timersMs[i] / 1000U, static_cast<uint32_t>(std::numeric_limits<uint16_t>::max()))));
+	const uint32_t now = SDL_GetTicks();
+	const uint32_t remainingMs = state.lockoutExpirationTick > now ? state.lockoutExpirationTick - now : 0;
+	cmd.lockoutSecondsRemaining = Swap16LE(static_cast<uint16_t>(std::min(remainingMs / 1000U, static_cast<uint32_t>(std::numeric_limits<uint16_t>::max()))));
+	if (bHiPri)
+		NetSendHiPri(MyPlayerId, reinterpret_cast<std::byte *>(&cmd), sizeof(cmd));
+	else
+		NetSendLoPri(MyPlayerId, reinterpret_cast<std::byte *>(&cmd), sizeof(cmd));
+}
+
+void NetSendCmdRaidReset(bool bHiPri, uint32_t raidId, uint32_t expectedVersion, uint32_t sequence)
+{
+	if (!IsRaidProtocolEnabled())
+		return;
+	TCmdRaidAction cmd {};
+	cmd.bCmd = CMD_RAID_RESET;
+	cmd.actorPlayerId = MyPlayerId;
+	cmd.targetPlayerId = MyPlayerId;
+	cmd.raidId = Swap32LE(raidId);
+	cmd.sequence = Swap32LE(sequence);
+	cmd.expectedVersion = Swap32LE(expectedVersion);
 	if (bHiPri)
 		NetSendHiPri(MyPlayerId, reinterpret_cast<std::byte *>(&cmd), sizeof(cmd));
 	else
@@ -4209,6 +4333,8 @@ size_t ParseCmd(uint8_t pnum, const TCmd *pCmd, size_t maxCmdSize)
 		return HandleCmd(OnRaidLeave, player, pCmd, maxCmdSize);
 	case CMD_RAID_READY_TOGGLE:
 		return HandleCmd(OnRaidReadyToggle, player, pCmd, maxCmdSize);
+	case CMD_RAID_READY:
+		return HandleCmd(OnRaidReady, player, pCmd, maxCmdSize);
 	case CMD_RAID_START:
 		return HandleCmd(OnRaidStart, player, pCmd, maxCmdSize);
 	case CMD_RAID_EVENT:
@@ -4217,6 +4343,10 @@ size_t ParseCmd(uint8_t pnum, const TCmd *pCmd, size_t maxCmdSize)
 		return HandleCmd(OnRaidCheckpoint, player, pCmd, maxCmdSize);
 	case CMD_RAID_STATE_SYNC:
 		return HandleCmd(OnRaidStateSync, player, pCmd, maxCmdSize);
+	case CMD_RAID_SNAPSHOT:
+		return HandleCmd(OnRaidSnapshot, player, pCmd, maxCmdSize);
+	case CMD_RAID_RESET:
+		return HandleCmd(OnRaidReset, player, pCmd, maxCmdSize);
 	default:
 		break;
 	}

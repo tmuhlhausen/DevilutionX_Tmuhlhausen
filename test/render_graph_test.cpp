@@ -31,4 +31,32 @@ TEST(RenderGraphTest, DetectsCycles)
 	EXPECT_FALSE(graph.Execute());
 }
 
+TEST(RenderGraphTest, FailsValidationWhenDependencyNodeMissing)
+{
+	RenderGraph graph;
+	graph.AddPass({ RenderPassId::World, "world", {}, [] {} });
+	graph.AddPass({ RenderPassId::Ui, "ui", { RenderPassId::World }, [] {} });
+	graph.AddPass({ RenderPassId::Post, "post", { RenderPassId::Ui, RenderPassId::World }, [] {} });
+
+	EXPECT_TRUE(graph.Validate());
+
+	RenderGraph brokenGraph;
+	brokenGraph.AddPass({ RenderPassId::World, "world", {}, [] {} });
+	brokenGraph.AddPass({ RenderPassId::Post, "post", { RenderPassId::Ui }, [] {} });
+
+	EXPECT_FALSE(brokenGraph.Validate());
+	EXPECT_FALSE(brokenGraph.Execute());
+}
+
+TEST(RenderGraphTest, FailsValidationWhenPassIdDuplicated)
+{
+	RenderGraph graph;
+	graph.AddPass({ RenderPassId::World, "world", {}, [] {} });
+	graph.AddPass({ RenderPassId::World, "world_shadow", {}, [] {} });
+	graph.AddPass({ RenderPassId::Ui, "ui", { RenderPassId::World }, [] {} });
+
+	EXPECT_FALSE(graph.Validate());
+	EXPECT_FALSE(graph.Execute());
+}
+
 } // namespace devilution
