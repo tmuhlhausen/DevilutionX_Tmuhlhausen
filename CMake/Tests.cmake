@@ -52,6 +52,7 @@ set(tests
   raid_protocol_test
   raid_progression_test
   raid_sync_test
+  rollback_state_test
 )
 set(standalone_tests
   codec_test

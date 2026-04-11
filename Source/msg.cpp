@@ -34,6 +34,7 @@
 #include "config.h"
 #include "control/control.hpp"
 #include "dead.h"
+#include "dvlnet/rollback_state.hpp"
 #include "engine/backbuffer_state.hpp"
 #include "engine/random.hpp"
 #include "engine/world_tile.hpp"
@@ -3475,6 +3476,15 @@ void DeltaLoadLevel()
 	DeltaLoadItems(deltaLevel);
 }
 
+void PredictLocalInput(const void *cmdData, size_t cmdSize)
+{
+	if (!*GetOptions().Network.rollback)
+		return;
+	const auto *bytes = static_cast<const std::byte *>(cmdData);
+	dvlnet::GetRollbackState().QueuePredictedInput(SimTickCount + 1, { bytes, cmdSize });
+	ParseCmd(MyPlayerId, reinterpret_cast<const TCmd *>(cmdData), cmdSize);
+}
+
 void NetSendCmd(bool bHiPri, _cmd_id bCmd)
 {
 	TCmd cmd;
@@ -3484,6 +3494,7 @@ void NetSendCmd(bool bHiPri, _cmd_id bCmd)
 		NetSendHiPri(MyPlayerId, reinterpret_cast<std::byte *>(&cmd), sizeof(cmd));
 	else
 		NetSendLoPri(MyPlayerId, reinterpret_cast<std::byte *>(&cmd), sizeof(cmd));
+	PredictLocalInput(&cmd, sizeof(cmd));
 }
 
 void NetSendCmdSpawnMonster(Point position, Direction dir, uint16_t typeIndex, uint16_t monsterId, uint32_t seed, uint8_t golemOwnerPlayerId, uint8_t golemSpellLevel)
@@ -3500,6 +3511,7 @@ void NetSendCmdSpawnMonster(Point position, Direction dir, uint16_t typeIndex, u
 	cmd.golemOwnerPlayerId = golemOwnerPlayerId;
 	cmd.golemSpellLevel = golemSpellLevel;
 	NetSendHiPri(MyPlayerId, reinterpret_cast<std::byte *>(&cmd), sizeof(cmd));
+	PredictLocalInput(&cmd, sizeof(cmd));
 }
 
 void NetSendCmdLoc(uint8_t playerId, bool bHiPri, _cmd_id bCmd, Point position)
@@ -3516,6 +3528,8 @@ void NetSendCmdLoc(uint8_t playerId, bool bHiPri, _cmd_id bCmd, Point position)
 		NetSendHiPri(playerId, reinterpret_cast<std::byte *>(&cmd), sizeof(cmd));
 	else
 		NetSendLoPri(playerId, reinterpret_cast<std::byte *>(&cmd), sizeof(cmd));
+	if (playerId == MyPlayerId)
+		PredictLocalInput(&cmd, sizeof(cmd));
 
 	MyPlayer->UpdatePreviewCelSprite(bCmd, position, 0, 0);
 }
@@ -3535,6 +3549,7 @@ void NetSendCmdLocParam1(bool bHiPri, _cmd_id bCmd, Point position, uint16_t wPa
 		NetSendHiPri(MyPlayerId, reinterpret_cast<std::byte *>(&cmd), sizeof(cmd));
 	else
 		NetSendLoPri(MyPlayerId, reinterpret_cast<std::byte *>(&cmd), sizeof(cmd));
+	PredictLocalInput(&cmd, sizeof(cmd));
 
 	MyPlayer->UpdatePreviewCelSprite(bCmd, position, wParam1, 0);
 }
@@ -3555,6 +3570,7 @@ void NetSendCmdLocParam2(bool bHiPri, _cmd_id bCmd, Point position, uint16_t wPa
 		NetSendHiPri(MyPlayerId, reinterpret_cast<std::byte *>(&cmd), sizeof(cmd));
 	else
 		NetSendLoPri(MyPlayerId, reinterpret_cast<std::byte *>(&cmd), sizeof(cmd));
+	PredictLocalInput(&cmd, sizeof(cmd));
 
 	MyPlayer->UpdatePreviewCelSprite(bCmd, position, wParam1, wParam2);
 }
@@ -3576,6 +3592,7 @@ void NetSendCmdLocParam3(bool bHiPri, _cmd_id bCmd, Point position, uint16_t wPa
 		NetSendHiPri(MyPlayerId, reinterpret_cast<std::byte *>(&cmd), sizeof(cmd));
 	else
 		NetSendLoPri(MyPlayerId, reinterpret_cast<std::byte *>(&cmd), sizeof(cmd));
+	PredictLocalInput(&cmd, sizeof(cmd));
 
 	MyPlayer->UpdatePreviewCelSprite(bCmd, position, wParam1, wParam2);
 }
@@ -3598,6 +3615,7 @@ void NetSendCmdLocParam4(bool bHiPri, _cmd_id bCmd, Point position, uint16_t wPa
 		NetSendHiPri(MyPlayerId, reinterpret_cast<std::byte *>(&cmd), sizeof(cmd));
 	else
 		NetSendLoPri(MyPlayerId, reinterpret_cast<std::byte *>(&cmd), sizeof(cmd));
+	PredictLocalInput(&cmd, sizeof(cmd));
 
 	MyPlayer->UpdatePreviewCelSprite(bCmd, position, wParam1, wParam3);
 }
@@ -3615,6 +3633,7 @@ void NetSendCmdParam1(bool bHiPri, _cmd_id bCmd, uint16_t wParam1)
 		NetSendHiPri(MyPlayerId, reinterpret_cast<std::byte *>(&cmd), sizeof(cmd));
 	else
 		NetSendLoPri(MyPlayerId, reinterpret_cast<std::byte *>(&cmd), sizeof(cmd));
+	PredictLocalInput(&cmd, sizeof(cmd));
 
 	MyPlayer->UpdatePreviewCelSprite(bCmd, {}, wParam1, 0);
 }
@@ -3630,6 +3649,7 @@ void NetSendCmdParam2(bool bHiPri, _cmd_id bCmd, uint16_t wParam1, uint16_t wPar
 		NetSendHiPri(MyPlayerId, reinterpret_cast<std::byte *>(&cmd), sizeof(cmd));
 	else
 		NetSendLoPri(MyPlayerId, reinterpret_cast<std::byte *>(&cmd), sizeof(cmd));
+	PredictLocalInput(&cmd, sizeof(cmd));
 }
 
 void NetSendCmdParam4(bool bHiPri, _cmd_id bCmd, uint16_t wParam1, uint16_t wParam2, uint16_t wParam3, uint16_t wParam4)
