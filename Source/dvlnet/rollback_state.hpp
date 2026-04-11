@@ -1,0 +1,51 @@
+#pragma once
+
+#include <cstddef>
+#include <cstdint>
+#include <functional>
+#include <optional>
+#include <span>
+#include <vector>
+
+namespace devilution::dvlnet {
+
+struct RollbackTickMetadata {
+	uint64_t tick = 0;
+	uint32_t stateHash = 0;
+	std::vector<std::byte> input;
+	bool hasSnapshot = false;
+};
+
+class RollbackState {
+public:
+	explicit RollbackState(size_t depth = 64);
+
+	void Reset();
+	void StoreSnapshot(uint64_t tick, std::span<const std::byte> worldSnapshot, uint32_t stateHash);
+	void QueuePredictedInput(uint64_t tick, std::span<const std::byte> input);
+	[[nodiscard]] std::optional<uint32_t> GetHash(uint64_t tick) const;
+	[[nodiscard]] bool HasSnapshot(uint64_t tick) const;
+	[[nodiscard]] bool DetectDivergence(uint64_t tick, uint32_t authoritativeHash) const;
+
+	bool HandleCorrection(uint64_t authoritativeTick, uint32_t authoritativeHash, uint64_t currentTick,
+	    const std::function<bool(std::span<const std::byte>)> &restoreSnapshot,
+	    const std::function<void(std::span<const std::byte>)> &replayInput) const;
+
+private:
+	struct Slot {
+		RollbackTickMetadata meta;
+		std::vector<std::byte> snapshot;
+	};
+
+	[[nodiscard]] size_t SlotIndex(uint64_t tick) const;
+	[[nodiscard]] const Slot *FindSlot(uint64_t tick) const;
+	Slot *FindSlot(uint64_t tick);
+
+	size_t depth_;
+	std::vector<Slot> ring_;
+};
+
+RollbackState &GetRollbackState();
+void ResetRollbackState();
+
+} // namespace devilution::dvlnet
