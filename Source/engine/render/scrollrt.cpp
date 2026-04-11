@@ -18,6 +18,7 @@
 #endif
 
 #include <ankerl/unordered_dense.h>
+#include <fmt/format.h>
 
 #include "DiabloUI/ui_flags.hpp"
 #include "automap.h"
@@ -27,6 +28,7 @@
 #include "dead.h"
 #include "diablo_msg.hpp"
 #include "doom.h"
+#include "dvlnet/net_telemetry.hpp"
 #include "engine/backbuffer_state.hpp"
 #include "engine/displacement.hpp"
 #include "engine/dx.h"
@@ -1482,6 +1484,22 @@ void DrawFPS(const Surface &out)
 	DrawString(out, formatted, Point { 8, 8 }, { .flags = UiFlags::ColorRed });
 }
 
+void DrawNetworkTelemetryOverlay(const Surface &out)
+{
+	if (!*GetOptions().Network.netDebugOverlay)
+		return;
+
+	const NetTickTelemetrySample telemetry = GetNetTelemetryAggregator().RollingSample();
+	const std::string text = fmt::format("NET RTT {:.1f}ms JIT {:.1f}ms DROP {:.1f}% RESEND {:.1f}% DIV {} RB {:.2f}ms",
+	    telemetry.rttMs,
+	    telemetry.jitterMs,
+	    telemetry.dropPct,
+	    telemetry.resendPct,
+	    telemetry.divergenceCount,
+	    telemetry.rollbackMs);
+	DrawString(out, text, Point { 8, 26 }, { .flags = UiFlags::ColorRed });
+}
+
 /**
  * @brief Update part of the screen from the back buffer
  */
@@ -1902,6 +1920,7 @@ void DrawAndBlit()
 	DrawCursor(out);
 
 	DrawFPS(out);
+	DrawNetworkTelemetryOverlay(out);
 
 	lua::GameDrawComplete();
 
