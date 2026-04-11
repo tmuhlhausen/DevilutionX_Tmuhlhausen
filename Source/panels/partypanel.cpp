@@ -3,6 +3,9 @@
 #include <expected.hpp>
 #include <optional>
 
+#include <SDL_timer.h>
+#include <fmt/format.h>
+
 #include "automap.h"
 #include "control/control.hpp"
 #include "engine/backbuffer_state.hpp"
@@ -15,12 +18,15 @@
 #include "engine/render/primitive_render.hpp"
 #include "engine/size.hpp"
 #include "inv.h"
+#include "msg.h"
 #include "options.h"
 #include "pfile.h"
 #include "qol/monhealthbar.h"
+#include "raid/raid.hpp"
 #include "qol/stash.h"
 #include "stores.h"
 #include "tables/playerdat.hpp"
+#include "utils/algorithm/container.hpp"
 #include "utils/status_macros.hpp"
 #include "utils/surface_to_clx.hpp"
 
@@ -175,6 +181,28 @@ void DrawPartyMemberInfoPanel(const Surface &out)
 	if (*GetOptions().Graphics.showFPS)
 		pos.y += FrameGap;
 
+	const Surface gameScreen = out.subregionY(0, gnViewportHeight);
+	const RaidInstanceState raid = GetActiveRaidState();
+	if (raid.raidId.IsValid()) {
+		size_t activeEncounter = 0;
+		for (size_t i = 0; i < raid.bossStates.size(); i++) {
+			if (raid.bossStates[i] != RaidEncounterState::Defeated) {
+				activeEncounter = i + 1;
+				break;
+			}
+		}
+		const int failedEncounters = static_cast<int>(c_count(raid.bossStates, RaidEncounterState::Failed));
+		const int attemptsLeft = std::max(0, 3 - failedEncounters);
+		const uint32_t now = SDL_GetTicks();
+		const uint32_t lockoutLeftMs = raid.lockoutExpirationTick > now ? raid.lockoutExpirationTick - now : 0;
+
+		DrawString(
+		    gameScreen,
+		    fmt::format("Raid Rdy {}/{} Enc {} Try {} Lock {}s", GetRaidReadyMemberCount(), GetRaidJoinedMemberCount(), activeEncounter, attemptsLeft, lockoutLeftMs / 1000),
+		    { pos.x, std::max(0, pos.y - 12) },
+		    { .flags = UiFlags::ColorWhitegold | UiFlags::Outlined | UiFlags::FontSize12 });
+	}
+
 	int currentLongestNameWidth = PortraitFrameSize.width;
 	bool portraitUnderCursor = false;
 
@@ -189,8 +217,6 @@ void DrawPartyMemberInfoPanel(const Surface &out)
 #endif
 		// Get the rect of the portrait to use later
 		const Rectangle currentPortraitRect = { pos, PortraitFrameSize };
-
-		const Surface gameScreen = out.subregionY(0, gnViewportHeight);
 
 		// Draw the characters frame
 		RenderClxSprite(gameScreen, (*PartyMemberFrame)[0], pos);

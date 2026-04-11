@@ -909,6 +909,10 @@ void NetSendCmdRaidReadyToggle(bool bHiPri, uint32_t raidId, uint32_t expectedVe
 void NetSendCmdRaidStart(bool bHiPri, uint32_t raidId, uint32_t expectedVersion, uint32_t sequence = 0);
 void NetSendCmdRaidEvent(bool bHiPri, uint32_t raidId, uint8_t encounterIndex, RaidEncounterState state, uint64_t objectiveBitsToSet, const std::array<uint32_t, MaxRaidTimers> &timersMs, bool updateTimers, uint32_t expectedVersion, uint32_t sequence = 0);
 void NetSendCmdRaidCheckpoint(bool bHiPri, uint32_t raidId, uint8_t encounterIndex, RaidEncounterState state, uint64_t objectiveBitsToSet, const std::array<uint32_t, MaxRaidTimers> &timersMs, bool updateTimers, uint32_t expectedVersion, uint32_t sequence = 0);
+uint8_t GetRaidJoinedMemberCount();
+uint8_t GetRaidReadyMemberCount();
+bool IsRaidMemberJoined(uint8_t playerId);
+bool IsRaidMemberReady(uint8_t playerId);
 void delta_close_portal(const Player &player);
 bool ValidateCmdSize(size_t requiredCmdSize, size_t maxCmdSize, size_t playerId);
 size_t ParseCmd(uint8_t pnum, const TCmd *pCmd, size_t maxCmdSize);

@@ -2738,6 +2738,26 @@ uint8_t GetRaidReadyCount()
 	return static_cast<uint8_t>(std::count(RaidReadyMembers.begin(), RaidReadyMembers.end(), true));
 }
 
+uint8_t GetRaidJoinedMemberCount()
+{
+	return GetRaidMemberCount();
+}
+
+uint8_t GetRaidReadyMemberCount()
+{
+	return GetRaidReadyCount();
+}
+
+bool IsRaidMemberJoined(uint8_t playerId)
+{
+	return IsValidRaidPlayerId(playerId) ? RaidJoinedMembers[playerId] : false;
+}
+
+bool IsRaidMemberReady(uint8_t playerId)
+{
+	return IsValidRaidPlayerId(playerId) ? RaidReadyMembers[playerId] : false;
+}
+
 void SendRaidStateToPeers()
 {
 	if (MyPlayerId != 0)
