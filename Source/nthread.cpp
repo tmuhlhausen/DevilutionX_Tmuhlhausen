@@ -15,6 +15,7 @@
 #endif
 
 #include "diablo.h"
+#include "dvlnet/net_telemetry.hpp"
 #include "engine/animationinfo.h"
 #include "engine/demomode.h"
 #include "game_mode.hpp"
@@ -87,6 +88,8 @@ uint32_t nthread_send_and_recv_turn(uint32_t curTurn, int turnDelta)
 		return 0;
 	}
 	while (curTurnsInTransit++ < gdwTurnsInTransit) {
+		const bool resent = curTurnsInTransit > 1;
+		GetNetTelemetryAggregator().RecordSend(resent);
 
 		const uint32_t turnTmp = turn_upper_bit | (curTurn & 0x7FFFFFFF);
 		turn_upper_bit = 0;
@@ -122,6 +125,7 @@ bool nthread_recv_turns(bool *pfSendAsync)
 		return true;
 	}
 	if (!SNetReceiveTurns(MAX_PLRS, (char **)glpMsgTbl, gdwMsgLenTbl, &player_state[0])) {
+		GetNetTelemetryAggregator().RecordDivergence();
 		sgbTicsOutOfSync = false;
 		sgbSyncCountdown = 1;
 		sgbPacketCountdown = 1;
@@ -136,6 +140,7 @@ bool nthread_recv_turns(bool *pfSendAsync)
 	if (pfSendAsync != nullptr)
 		*pfSendAsync = true;
 	last_tick += gnTickDelay;
+	GetNetTelemetryAggregator().NextTick();
 	return true;
 }
 
@@ -149,6 +154,7 @@ void nthread_start(bool setTurnUpperBit)
 	last_tick = SDL_GetTicks();
 	SimTickCount = 0;
 	SimStateHash = 0;
+	GetNetTelemetryAggregator().SetTraceEnabled(*GetOptions().Network.netTraceEnabled);
 	sgbPacketCountdown = 1;
 	sgbSyncCountdown = 1;
 	sgbTicsOutOfSync = true;

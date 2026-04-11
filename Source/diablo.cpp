@@ -2274,6 +2274,16 @@ void InitKeymapActions()
 	    nullptr,
 	    CanPlayerTakeAction);
 	options.Keymapper.AddAction(
+	    "ToggleNetworkDebugOverlay",
+	    N_("Toggle network debug overlay"),
+	    N_("Shows or hides rolling transport and rollback telemetry."),
+	    SDLK_UNKNOWN,
+	    [] {
+		    GetOptions().Network.netDebugOverlay.SetValue(!*GetOptions().Network.netDebugOverlay);
+	    },
+	    nullptr,
+	    IsGameRunning);
+	options.Keymapper.AddAction(
 	    "ChatLog",
 	    N_("Chat Log"),
 	    N_("Displays chat log."),

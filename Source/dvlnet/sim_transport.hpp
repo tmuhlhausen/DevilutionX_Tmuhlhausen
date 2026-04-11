@@ -13,6 +13,7 @@
 
 #include "dvlnet/net_transport.hpp"
 #include "dvlnet/net_chaos.hpp"
+#include "dvlnet/net_telemetry.hpp"
 
 namespace devilution {
 
@@ -42,9 +43,15 @@ public:
 	{
 		if (!isOpen_)
 			return tl::unexpected("transport is closed");
+		GetNetTelemetryAggregator().RecordSend(false);
 		if (chaos_.has_value()) {
+			std::size_t emitted = 0;
 			for (std::vector<uint8_t> &mutated : chaos_->Process(packet)) {
 				inbox_.emplace_back(mutated.begin(), mutated.end());
+				++emitted;
+			}
+			if (emitted == 0) {
+				GetNetTelemetryAggregator().RecordDrop();
 			}
 		} else {
 			inbox_.emplace_back(packet.data.begin(), packet.data.end());
