@@ -4,7 +4,7 @@
  * Implementation of the main game initialization functions.
  */
 #include <array>
-#include <cstring>
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string_view>
@@ -57,6 +57,7 @@
 #include "engine/load_file.hpp"
 #include "engine/random.hpp"
 #include "engine/render/clx_render.hpp"
+#include "engine/render/render_backend.hpp"
 #include "engine/render/render_graph.hpp"
 #include "engine/sound.h"
 #include "game_mode.hpp"
@@ -955,15 +956,28 @@ void RunGameLoop(interface_mode uMsg)
 			return;
 		}
 
+		std::array<RenderFrameStats, 3> passFrameStats {};
+		const auto capturePassStats = [&](RenderPassId passId) {
+			IRenderBackend *backend = GetActiveRenderBackend();
+			if (backend == nullptr)
+				return;
+			passFrameStats[static_cast<size_t>(passId)] = backend->GetLastFrameStats();
+		};
+
 		RenderGraph graph = CreateDefaultRenderGraph(
-		    []() { DrawAndBlit(); },
-		    []() {
-			    // Reserved for explicit UI pass migration.
+		    [&]() {
+			    DrawLegacyWorldPass();
+			    capturePassStats(RenderPassId::World);
 		    },
-		    []() {
-			    // Reserved for explicit post pass migration.
+		    [&]() {
+			    DrawLegacyUiPass();
+			    capturePassStats(RenderPassId::Ui);
+		    },
+		    [&]() {
+			    DrawLegacyPostPass();
+			    capturePassStats(RenderPassId::Post);
 		    });
-		if (!graph.Execute()) {
+		if (!graph.Validate() || !graph.Execute()) {
 			// Safety fallback to legacy path.
 			DrawAndBlit();
 		}
