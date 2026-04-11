@@ -22,6 +22,43 @@ Check out the [manual](https://github.com/diasurgical/devilutionX/wiki) for avai
 
 For a full list of changes, see our [changelog](docs/CHANGELOG.md).
 
+## Roadmap
+
+This roadmap tracks fork-specific features and the delivery targets needed to ship them safely.
+
+**Approval flow for every roadmap item:** idea ➜ RFC issue ➜ prototype PR ➜ integration PR.
+
+### Raid Content Pipeline ([docs/raid/](docs/raid/))
+- Define a deterministic encounter script schema and ship `>= 20` validation tests across boss phases, loot tables, and fail states.
+- Add a raid content compiler with lint gates that blocks merges on schema violations and keeps compile time under `2 minutes` for a full raid bundle.
+- Deliver reusable encounter simulation tooling that can replay `1,000+` scripted runs with identical outcomes across two consecutive CI jobs.
+- Publish a content authoring checklist and reference templates to reduce first-pass review comments by `30%` over two milestones.
+
+### Guild Economy & Rewards ([docs/guild-economy/](docs/guild-economy/))
+- Introduce guild treasury transaction types with invariant checks that keep ledger drift at `0` in nightly audit tests.
+- Implement weekly reward distribution rules with automated tests covering `100%` of payout branches and edge cases (join/leave mid-cycle, ties, inactivity).
+- Add anti-inflation sinks and balancing telemetry, targeting a monthly net currency delta within `±5%` of design forecast.
+- Provide guild progression dashboards and event exports so admins can reconcile reward outcomes in under `10 minutes` per cycle.
+
+### Netcode Reliability ([docs/netcode/](docs/netcode/))
+- Add end-to-end deterministic state-sync tests for high-latency scenarios (`150ms`, `250ms`, `400ms`) with a desync rate target below `0.1%`.
+- Implement packet loss recovery and resend backoff, reducing disconnects from simulated `5%` packet loss sessions by `>= 40%`.
+- Ship host migration smoke coverage that completes reconnection in under `8 seconds` for `90%` of test sessions.
+- Add protocol compatibility checks and wire-version docs to guarantee backward compatibility across one minor version.
+
+### Observability & Ops ([docs/ops/](docs/ops/))
+- Instrument structured gameplay/network logs with trace IDs, achieving `>= 95%` coverage on critical multiplayer paths.
+- Build service-level dashboards (latency, disconnects, desyncs, crash-free sessions) with alert thresholds tied to release gates.
+- Add on-demand diagnostics bundles that capture logs/config/runtime metadata and cut triage-to-root-cause time by `50%`.
+- Document incident response runbooks and on-call escalation paths with quarterly drill completion tracked in `docs/ops/`.
+
+### Modding API ([docs/modding-api/](docs/modding-api/))
+- Publish a versioned API surface map and semantic compatibility policy, with CI checks blocking undocumented public API changes.
+- Deliver sandboxed script hooks for combat, loot, and events, including performance budgets (`< 1ms` average hook overhead per tick).
+- Add an integration test suite of `25+` canonical mods to validate API behavior across patch upgrades.
+- Provide starter mod templates and packaging docs that reduce new-mod setup time to under `15 minutes` for first-time contributors.
+
+
 # How to Install
 
 Note: You'll need access to the data from the original game. If you don't have an original CD, you can [buy Diablo from GoG.com](https://www.gog.com/game/diablo) or Battle.net. Alternatively, you can use `spawn.mpq` from the [shareware](https://github.com/diasurgical/devilutionx-assets/releases/latest/download/spawn.mpq) [[2]](http://ftp.blizzard.com/pub/demos/diablosw.exe) version, in place of `DIABDAT.MPQ`, to play the shareware portion of the game.
