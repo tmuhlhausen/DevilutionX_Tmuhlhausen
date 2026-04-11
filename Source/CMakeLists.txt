@@ -83,6 +83,7 @@ set(libdevilutionx_SRCS
   dvlnet/frame_queue.cpp
   dvlnet/loopback.cpp
   dvlnet/packet.cpp
+  dvlnet/udp_transport.cpp
 
   engine/actor_position.cpp
   engine/animationinfo.cpp
