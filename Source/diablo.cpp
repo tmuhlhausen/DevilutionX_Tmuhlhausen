@@ -4,9 +4,11 @@
  * Implementation of the main game initialization functions.
  */
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string_view>
+#include <vector>
 
 #ifdef USE_SDL3
 #include <SDL3/SDL_events.h>
@@ -43,6 +45,7 @@
 #include "diablo_msg.hpp"
 #include "discord/discord.h"
 #include "dvlnet/net_transport_mode.hpp"
+#include "dvlnet/rollback_state.hpp"
 #include "doom.h"
 #include "encrypt.h"
 #include "engine/backbuffer_state.hpp"
@@ -54,6 +57,7 @@
 #include "engine/load_file.hpp"
 #include "engine/random.hpp"
 #include "engine/render/clx_render.hpp"
+#include "engine/render/render_backend.hpp"
 #include "engine/render/render_graph.hpp"
 #include "engine/sound.h"
 #include "game_mode.hpp"
@@ -180,6 +184,56 @@ bool was_archives_init = false;
 /** To know if surfaces have been initialized or not */
 bool was_window_init = false;
 bool was_ui_init = false;
+
+template <typename T>
+void AppendRollbackBytes(std::vector<std::byte> &snapshot, const T &value)
+{
+	const auto *start = reinterpret_cast<const std::byte *>(&value);
+	snapshot.insert(snapshot.end(), start, start + sizeof(T));
+}
+
+std::vector<std::byte> CaptureRollbackSnapshot()
+{
+	std::vector<std::byte> snapshot;
+	for (const Player &player : Players) {
+		const bool active = player.isActive();
+		AppendRollbackBytes(snapshot, active);
+		if (!active)
+			continue;
+		AppendRollbackBytes(snapshot, player._plrlevel);
+		AppendRollbackBytes(snapshot, player.position.tile.x);
+		AppendRollbackBytes(snapshot, player.position.tile.y);
+		AppendRollbackBytes(snapshot, player._pHitPoints);
+		AppendRollbackBytes(snapshot, player._pMana);
+		AppendRollbackBytes(snapshot, player._pmode);
+	}
+	return snapshot;
+}
+
+bool RestoreRollbackSnapshot(std::span<const std::byte> snapshot)
+{
+	size_t offset = 0;
+	auto read = [&](auto &value) -> bool {
+		constexpr size_t Size = sizeof(value);
+		if (offset + Size > snapshot.size())
+			return false;
+		memcpy(&value, snapshot.data() + offset, Size);
+		offset += Size;
+		return true;
+	};
+
+	for (Player &player : Players) {
+		bool active = false;
+		if (!read(active))
+			return false;
+		if (!active)
+			continue;
+		if (!read(player._plrlevel) || !read(player.position.tile.x) || !read(player.position.tile.y) || !read(player._pHitPoints) || !read(player._pMana) || !read(player._pmode))
+			return false;
+		player.position.future = player.position.tile;
+	}
+	return true;
+}
 
 void StartGame(interface_mode uMsg)
 {
@@ -902,15 +956,28 @@ void RunGameLoop(interface_mode uMsg)
 			return;
 		}
 
+		std::array<RenderFrameStats, 3> passFrameStats {};
+		const auto capturePassStats = [&](RenderPassId passId) {
+			IRenderBackend *backend = GetActiveRenderBackend();
+			if (backend == nullptr)
+				return;
+			passFrameStats[static_cast<size_t>(passId)] = backend->GetLastFrameStats();
+		};
+
 		RenderGraph graph = CreateDefaultRenderGraph(
-		    []() { DrawAndBlit(); },
-		    []() {
-			    // Reserved for explicit UI pass migration.
+		    [&]() {
+			    DrawLegacyWorldPass();
+			    capturePassStats(RenderPassId::World);
 		    },
-		    []() {
-			    // Reserved for explicit post pass migration.
+		    [&]() {
+			    DrawLegacyUiPass();
+			    capturePassStats(RenderPassId::Ui);
+		    },
+		    [&]() {
+			    DrawLegacyPostPass();
+			    capturePassStats(RenderPassId::Post);
 		    });
-		if (!graph.Execute()) {
+		if (!graph.Validate() || !graph.Execute()) {
 			// Safety fallback to legacy path.
 			DrawAndBlit();
 		}
@@ -980,6 +1047,15 @@ void RunGameLoop(interface_mode uMsg)
 				simStateHash *= 16777619u;
 			}
 			nthread_RecordSimStateHash(simStateHash);
+			const std::vector<std::byte> snapshot = CaptureRollbackSnapshot();
+			dvlnet::GetRollbackState().StoreSnapshot(SimTickCount, snapshot, simStateHash);
+			dvlnet::GetRollbackState().HandleCorrection(SimTickCount, simStateHash, SimTickCount,
+			    [](std::span<const std::byte> snapshotBytes) {
+				    return RestoreRollbackSnapshot(snapshotBytes);
+			    },
+			    [](std::span<const std::byte> /*input*/) {
+				    // Replay integration for authoritative correction is intentionally conservative for now.
+			    });
 		}
 		gbGameLoopStartup = false;
 		if (drawGame)
@@ -2211,6 +2287,16 @@ void InitKeymapActions()
 	    },
 	    nullptr,
 	    CanPlayerTakeAction);
+	options.Keymapper.AddAction(
+	    "ToggleNetworkDebugOverlay",
+	    N_("Toggle network debug overlay"),
+	    N_("Shows or hides rolling transport and rollback telemetry."),
+	    SDLK_UNKNOWN,
+	    [] {
+		    GetOptions().Network.netDebugOverlay.SetValue(!*GetOptions().Network.netDebugOverlay);
+	    },
+	    nullptr,
+	    IsGameRunning);
 	options.Keymapper.AddAction(
 	    "ChatLog",
 	    N_("Chat Log"),

@@ -13,6 +13,7 @@
 
 #include <expected.hpp>
 
+#include "dvlnet/net_telemetry.hpp"
 #include "player.h"
 
 namespace devilution {
@@ -176,6 +177,7 @@ tl::expected<void, PacketError> base::HandleEchoReply(packet &pkt)
 	return pkt.Time().transform([&](cookie_t &&pktTime) {
 		PlayerState &playerState = playerStateTable_[src];
 		playerState.roundTripLatency = now - pktTime;
+		GetNetTelemetryAggregator().RecordRtt(static_cast<float>(playerState.roundTripLatency));
 	});
 }
 
@@ -282,6 +284,7 @@ bool base::SNetSendMessage(uint8_t playerId, void *data, size_t size)
 			LogError("send: {}", result.error().what());
 			return false;
 		}
+		GetNetTelemetryAggregator().RecordSend(false);
 	}
 	return true;
 }

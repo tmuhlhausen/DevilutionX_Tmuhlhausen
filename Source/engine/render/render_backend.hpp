@@ -22,4 +22,7 @@ public:
 	virtual RenderFrameStats GetLastFrameStats() const = 0;
 };
 
+void SetActiveRenderBackend(IRenderBackend *backend);
+[[nodiscard]] IRenderBackend *GetActiveRenderBackend();
+
 } // namespace devilution
