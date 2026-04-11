@@ -48,6 +48,10 @@ set(tests
   char_panel_test
   game_menu_test
   gameplay_feature_flags_test
+  raid_state_test
+  raid_protocol_test
+  raid_progression_test
+  raid_sync_test
 )
 set(standalone_tests
   codec_test
