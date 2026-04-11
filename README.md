@@ -22,20 +22,58 @@ Check out the [manual](https://github.com/diasurgical/devilutionX/wiki) for avai
 
 For a full list of changes, see our [changelog](docs/CHANGELOG.md).
 
+# What this fork adds
+
+This fork extends DevilutionX with multiplayer-focused systems for raids, guild progression, rollback-aware synchronization, and network telemetry tooling for debugging and live iteration.
+
+- **Raid gameplay loop**: Party raid state, sync, and progression logic designed for repeatable group encounters.
+- **Guild progression**: Shared progression structures that track account/group advancement over time.
+- **Rollback state management**: Deterministic multiplayer recovery/state rewind scaffolding for desync resilience.
+- **Net telemetry**: Instrumentation and traces for network behavior, rollback diagnostics, and protocol tuning.
+
+# Repo map
+
+- `Source/raid` - Raid state, raid progression, protocol helpers, and raid runtime logic.
+- `Source/guild` - Guild progression models and related progression handling.
+- `Source/dvlnet` - Multiplayer transport, rollback state, and telemetry integration points.
+- `test` - Unit/integration tests, including raid, rollback, and telemetry coverage.
+- `docs` - Contributor, build, and project documentation.
+- `CMake` - Build configuration modules and platform/toolchain setup.
+- `Packaging` - Packaging scripts and assets for release targets.
+
+# Multiplayer, raids, and progression (fork focus)
+
+Core fork-specific implementation files include:
+
+- `Source/raid/raid_state.hpp` and `Source/raid/raid_state.cpp`
+- `Source/raid/raid_progression.hpp` and `Source/raid/raid_progression.cpp`
+- `Source/guild/guild_progression.hpp` and `Source/guild/guild_progression.cpp`
+- `Source/dvlnet/rollback_state.hpp` and `Source/dvlnet/rollback_state.cpp`
+- `Source/dvlnet/net_telemetry.hpp` and `Source/dvlnet/net_telemetry.cpp`
+
 # How to Install
 
-Note: You'll need access to the data from the original game. If you don't have an original CD, you can [buy Diablo from GoG.com](https://www.gog.com/game/diablo) or Battle.net. Alternatively, you can use `spawn.mpq` from the [shareware](https://github.com/diasurgical/devilutionx-assets/releases/latest/download/spawn.mpq) [[2]](http://ftp.blizzard.com/pub/demos/diablosw.exe) version, in place of `DIABDAT.MPQ`, to play the shareware portion of the game.
+You must provide original game data to run this project:
 
-Download the latest [DevilutionX release](https://github.com/diasurgical/devilutionX/releases/latest) and extract the contents to a location of your choosing or [build from source](#building-from-source).
+- **Required for full Diablo**: `DIABDAT.MPQ`.
+- **Shareware-only alternative**: `spawn.mpq` can be used *instead of* `DIABDAT.MPQ`, but only enables the shareware portion.
+- **Required for Hellfire expansion**: `hellfire.mpq`, `hfmonk.mpq`, `hfmusic.mpq`, and `hfvoice.mpq`.
 
-- Copy `DIABDAT.MPQ` from the CD or Diablo installation (or [extract it from the GoG installer](https://github.com/diasurgical/devilutionX/wiki/Extracting-MPQs-from-the-GoG-installer)) to the DevilutionX folder.
-- To run the Diablo: Hellfire expansion, you will also need to copy `hellfire.mpq`, `hfmonk.mpq`, `hfmusic.mpq`, and `hfvoice.mpq`.
+If you do not already own the game data, you can obtain Diablo from [GoG.com](https://www.gog.com/game/diablo) or Battle.net. You can also [extract `DIABDAT.MPQ` from the GoG installer](https://github.com/diasurgical/devilutionX/wiki/Extracting-MPQs-from-the-GoG-installer). The shareware `spawn.mpq` is available from [devilutionx-assets](https://github.com/diasurgical/devilutionx-assets/releases/latest/download/spawn.mpq) and Blizzard's [historic demo mirror](http://ftp.blizzard.com/pub/demos/diablosw.exe).
 
-For more detailed instructions: [Installation Instructions](./docs/installing.md).
+Download the latest [DevilutionX release](https://github.com/diasurgical/devilutionX/releases/latest), extract it, then place the required MPQ files next to the executable. Alternatively, [build from source](#building-from-source).
+
+For full platform-specific steps, see [Installation Instructions](docs/installing.md).
 
 # Contributing
 
-We are always looking for more people to help with [coding](docs/CONTRIBUTING.md), [documentation](https://github.com/diasurgical/devilutionX/wiki), [testing the latest builds](#test-builds), spreading the word, or simply just hanging out on our [Discord server](https://discord.gg/devilutionx).
+We are always looking for more people to help with [coding](docs/CONTRIBUTING.md), [documentation](https://github.com/diasurgical/devilutionX/wiki), [testing the latest builds](#test-builds), spreading the word, or hanging out on our [Discord server](https://discord.gg/devilutionx).
+
+Contributor quick pointers:
+
+- Start with the contributor guide: [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md).
+- Raid-focused tests: `test/raid_state_test.cpp`, `test/raid_progression_test.cpp`, `test/raid_sync_test.cpp`, `test/raid_protocol_test.cpp`.
+- Rollback-focused test: `test/rollback_state_test.cpp`.
 
 # Mods
 
@@ -67,7 +105,7 @@ If you want to help test the latest development version (make sure to back up yo
 
 # Building from Source
 
-Want to compile the program by yourself? Great! Simply follow the [build instructions](./docs/building.md).
+Want to compile the program by yourself? Great! Simply follow the [build instructions](docs/building.md).
 
 # Credits
 
