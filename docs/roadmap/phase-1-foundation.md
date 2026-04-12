@@ -10,6 +10,14 @@ Phase 1 establishes a deterministic raid core, rollback-safe networking behavior
 - `Source/raid/raid_rules.*`
 - `Source/raid/raid_progression.*`
 
+### Raid acceptance traceability (README targets)
+
+| Acceptance target | Acceptance check | Test coverage |
+|---|---|---|
+| boss phases | Scripted boss phase progression uses explicit next-phase links and condition-gated transitions. | `EncounterEnginePhaseTest.ScriptedTransitionUsesNextPhaseId`, `EncounterEnginePhaseTest.MechanicConditionBlocksUntilSatisfied` |
+| loot tables | Loot-table schema accepts valid multi-reward payloads and rejects malformed reward entries. | `EncounterSchemaTest.LootTableAcceptsMultipleDistinctRewards`, `EncounterSchemaTest.LootTableRejectsEmptyIdAndZeroQuantity` |
+| fail states | Boss fail states emit deterministic failure events and enforce rollback policy behavior. | `EncounterEnginePhaseTest.WipeFailureEmitsFailStateAndTracksWipes`, `EncounterEnginePhaseTest.CheckpointRollbackFailureReturnsToStartPhase` |
+
 ### Acceptance checks
 
 #### A) State transition correctness (`raid_state.*`)

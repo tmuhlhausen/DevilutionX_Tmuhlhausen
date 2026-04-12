@@ -67,5 +67,68 @@ TEST(EncounterEnginePhaseTest, MechanicConditionBlocksUntilSatisfied)
 	EXPECT_NE(it, events.end());
 }
 
+TEST(EncounterEnginePhaseTest, WipeFailureEmitsFailStateAndTracksWipes)
+{
+	EncounterDefinition def;
+	def.startPhaseId = 0;
+	def.phases = { EncounterPhaseDef { .id = 0, .failurePolicy = EncounterFailurePolicy::Wipe } };
+
+	EncounterWorldSnapshot snapshot;
+	std::vector<EncounterEvent> events;
+	EncounterEngine engine;
+	engine.Reset(def);
+	engine.SetHooks(EncounterHooks {
+		[&]() { return snapshot; },
+		[&](const EncounterEvent &event) { events.push_back(event); },
+		nullptr,
+	});
+
+	snapshot.nowMs = 5;
+	snapshot.allPlayersDead = true;
+	engine.Tick(true);
+
+	auto failure = std::find_if(events.begin(), events.end(), [](const EncounterEvent &event) {
+		return event.type == EncounterEventType::FailureTriggered && event.failurePolicy == EncounterFailurePolicy::Wipe;
+	});
+	EXPECT_NE(failure, events.end());
+	EXPECT_EQ(engine.GetTelemetry().totalWipes, 1u);
+}
+
+TEST(EncounterEnginePhaseTest, CheckpointRollbackFailureReturnsToStartPhase)
+{
+	EncounterDefinition def;
+	def.startPhaseId = 0;
+	def.phases = {
+		EncounterPhaseDef { .id = 0, .exitCondition = EncounterCondition { EncounterConditionType::TimeElapsedAtLeast, 1 }, .nextPhaseId = 1 },
+		EncounterPhaseDef { .id = 1, .failurePolicy = EncounterFailurePolicy::CheckpointRollback },
+	};
+
+	EncounterWorldSnapshot snapshot;
+	std::vector<EncounterEvent> events;
+	EncounterEngine engine;
+	engine.Reset(def);
+	engine.SetHooks(EncounterHooks {
+		[&]() { return snapshot; },
+		[&](const EncounterEvent &event) { events.push_back(event); },
+		nullptr,
+	});
+
+	snapshot.nowMs = 0;
+	engine.Tick(true);
+	snapshot.nowMs = 2;
+	engine.Tick(true);
+	ASSERT_EQ(engine.GetActivePhaseId(), 1);
+
+	snapshot.nowMs = 3;
+	snapshot.allPlayersDead = true;
+	engine.Tick(true);
+
+	EXPECT_EQ(engine.GetActivePhaseId(), 0);
+	auto rollbackEnter = std::find_if(events.begin(), events.end(), [](const EncounterEvent &event) {
+		return event.type == EncounterEventType::PhaseEntered && event.phaseId == 0 && event.timestampMs == 3;
+	});
+	EXPECT_NE(rollbackEnter, events.end());
+}
+
 } // namespace
 } // namespace devilution
