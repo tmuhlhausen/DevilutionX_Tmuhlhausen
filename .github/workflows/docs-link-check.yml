@@ -1,0 +1,22 @@
+name: Docs Link Check
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+jobs:
+  markdown-internal-links:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Check internal Markdown links
+        run: python3 tools/check_markdown_internal_links.py
