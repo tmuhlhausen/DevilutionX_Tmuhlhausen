@@ -38,6 +38,19 @@ Phase 1 establishes a deterministic raid core, rollback-safe networking behavior
 - Reconnect/replay paths preserve exactly-once reward grant semantics.
 - Progression tests verify first-grant, duplicate-event, and rollback/replay scenarios.
 
+### Acceptance traceability table
+
+| Acceptance check ID | Source module | Test target(s) from `CMake/Tests.cmake` | Pass condition | Owner |
+|---|---|---|---|---|
+| P1-RAID-A | `Source/raid/raid_state.*` | `raid_state_test`, `raid_sync_test` | Transition graph only permits valid edges, rejects invalid edges with reason codes, and snapshot replay lands in identical terminal state. | Raid Systems Lead |
+| P1-RAID-B | `Source/raid/raid_rules.*` | `raid_sync_test`, `raid_protocol_test` | Lockout and eligibility checks are deterministic across host/client simulation, including late join/reconnect/stale cache denial cases. | Raid Systems Lead |
+| P1-RAID-C | `Source/raid/raid_progression.*` | `raid_progression_test`, `raid_protocol_test` | Rewards are granted exactly once per canonical completion key and remain deduplicated through reconnect/replay/rollback paths. | Raid Systems Lead |
+| P1-ENCOUNTER-A | `Source/raid/encounter_schema.*` | `encounter_schema_test` | Encounter and loot schema validation accepts valid multi-reward payloads and rejects malformed reward entries with deterministic outcomes. | Raid Systems Lead |
+| P1-ENCOUNTER-B | `Source/raid/encounter_engine_phase.*` | `encounter_engine_phase_test` | Scripted boss phase flow obeys explicit next-phase links and condition gates, including deterministic fail-state behavior. | Raid Systems Lead |
+| P1-NET-A | `Source/dvlnet/rollback_state.*` | `rollback_state_test`, `raid_sync_test` | Divergence detection remains deterministic and monotonic per frame with explicit soft/hard thresholds under synchronized state slices. | Networking Lead |
+| P1-NET-B | `Source/dvlnet/rollback_state.*` | `rollback_state_test` | Correction replay is idempotent, preserves immutable baselines, and never advances authoritative frame beyond validated bounds. | Networking Lead |
+| P1-NET-C | `Source/dvlnet/net_telemetry.*` | `net_telemetry_trace_test` | Telemetry lines round-trip without semantic drift, malformed fields produce structured errors, and versioned fields remain backward-compatible. | Networking Lead |
+
 ---
 
 ## Track 2: Netcode Integrity
