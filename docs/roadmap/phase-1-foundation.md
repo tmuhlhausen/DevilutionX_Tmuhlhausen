@@ -3,6 +3,18 @@
 ## Scope
 Phase 1 establishes a deterministic raid core, rollback-safe networking behavior, and a clear contributor on-ramp.
 
+## Current code map (canonical netcode locations)
+
+- **Current netcode (authoritative now):** `Source/dvlnet/*`.
+- **Future migration target (planned only unless explicitly landed):** `Source/engine/net/*`.
+
+### Net migration stage legend
+- **Stage 0 — Current-only (`dvlnet`)**: Acceptance must validate behavior in `Source/dvlnet/*`.
+- **Stage 1 — Dual-path (`dvlnet` + `engine/net`)**: `Source/engine/net/*` may be introduced, but completion still requires `dvlnet` parity.
+- **Stage 2 — Engine-net authoritative (`engine/net`)**: `Source/engine/net/*` is canonical; `dvlnet` is compatibility fallback.
+
+> Completion guardrail: Netcode tasks cannot be marked complete against `Source/engine/net/*` alone unless the task explicitly requires Stage 1 or Stage 2.
+
 ## Track 1: Raid Core
 
 ### Targets
@@ -62,21 +74,21 @@ Phase 1 establishes a deterministic raid core, rollback-safe networking behavior
 ### Invariants
 
 #### A) Divergence detection (`rollback_state.*`)
-- Divergence is computed from deterministic frame fingerprints over synchronized state slices.
-- Detection must be monotonic per frame: once marked divergent, frame remains divergent until corrected.
-- Thresholds for soft vs hard divergence are explicit and test-covered.
+- Divergence is computed from deterministic frame fingerprints over synchronized state slices. *(Path: `dvlnet`, Stage: 0)*
+- Detection must be monotonic per frame: once marked divergent, frame remains divergent until corrected. *(Path: `dvlnet`, Stage: 0)*
+- Thresholds for soft vs hard divergence are explicit and test-covered. *(Path: `dvlnet` now, `engine/net` at Stage 1)*
 
 #### B) Correction replay safety (`rollback_state.*`)
-- Replay never mutates immutable baseline snapshots.
-- Replay is idempotent for identical correction payloads.
-- Replay cannot advance authoritative frame counter beyond validated correction bounds.
-- Safety tests include out-of-order corrections, duplicate corrections, and partial state deltas.
+- Replay never mutates immutable baseline snapshots. *(Path: `dvlnet`, Stage: 0)*
+- Replay is idempotent for identical correction payloads. *(Path: `dvlnet`, Stage: 0)*
+- Replay cannot advance authoritative frame counter beyond validated correction bounds. *(Path: `dvlnet`, Stage: 0)*
+- Safety tests include out-of-order corrections, duplicate corrections, and partial state deltas. *(Path: `dvlnet` tests now, `engine/net` duplication allowed at Stage 1)*
 
 #### C) Telemetry parse/format consistency (`net_telemetry.*`)
-- Every emitted telemetry line round-trips (`format -> parse -> format`) without semantic drift.
-- Parser rejects malformed fields with structured error tags (not silent fallback).
-- Versioned telemetry schema fields remain backward-compatible for prior minor versions.
-- Tests include fuzzed line inputs and golden-line fixtures.
+- Every emitted telemetry line round-trips (`format -> parse -> format`) without semantic drift. *(Path: `dvlnet`, Stage: 0)*
+- Parser rejects malformed fields with structured error tags (not silent fallback). *(Path: `dvlnet`, Stage: 0)*
+- Versioned telemetry schema fields remain backward-compatible for prior minor versions. *(Path: `dvlnet` now, `engine/net` at Stage 1+)*
+- Tests include fuzzed line inputs and golden-line fixtures. *(Path: `dvlnet` tests now, mirrored `engine/net` coverage required at Stage 1+)*
 
 ---
 
