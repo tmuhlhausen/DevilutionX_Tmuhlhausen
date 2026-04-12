@@ -16,6 +16,24 @@ struct RollbackTickMetadata {
 	bool hasSnapshot = false;
 };
 
+enum class RollbackReplayPolicyProfile {
+	Aggressive,
+	Balanced,
+	Conservative,
+};
+
+struct RollbackReplayPolicy {
+	uint32_t maxCorrectionDepth = 12;
+	uint32_t maxResendsInFlight = 2;
+	float divergenceRttGateMs = 225.0F;
+	float dropGatePct = 4.0F;
+};
+
+struct RollbackAdaptiveThresholds {
+	uint32_t maxCorrectionDepth = 12;
+	uint32_t maxResendsInFlight = 2;
+};
+
 class RollbackState {
 public:
 	explicit RollbackState(size_t depth = 64);
@@ -26,6 +44,11 @@ public:
 	[[nodiscard]] std::optional<uint32_t> GetHash(uint64_t tick) const;
 	[[nodiscard]] bool HasSnapshot(uint64_t tick) const;
 	[[nodiscard]] bool DetectDivergence(uint64_t tick, uint32_t authoritativeHash) const;
+	void SetReplayPolicyProfile(RollbackReplayPolicyProfile profile);
+	[[nodiscard]] RollbackReplayPolicyProfile ReplayPolicyProfile() const;
+	[[nodiscard]] RollbackReplayPolicy ReplayPolicy() const;
+	[[nodiscard]] RollbackAdaptiveThresholds ComputeAdaptiveThresholds(float rollingRttMs, float rollingDropPct, float resendPct) const;
+	[[nodiscard]] uint32_t MaxResendsInFlight(float rollingRttMs, float rollingDropPct, float resendPct) const;
 
 	bool HandleCorrection(uint64_t authoritativeTick, uint32_t authoritativeHash, uint64_t currentTick,
 	    const std::function<bool(std::span<const std::byte>)> &restoreSnapshot,
@@ -43,6 +66,7 @@ private:
 
 	size_t depth_;
 	std::vector<Slot> ring_;
+	RollbackReplayPolicyProfile profile_ = RollbackReplayPolicyProfile::Balanced;
 };
 
 RollbackState &GetRollbackState();

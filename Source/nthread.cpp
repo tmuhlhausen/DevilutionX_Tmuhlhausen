@@ -16,6 +16,7 @@
 
 #include "diablo.h"
 #include "dvlnet/net_telemetry.hpp"
+#include "dvlnet/rollback_state.hpp"
 #include "engine/animationinfo.h"
 #include "engine/demomode.h"
 #include "game_mode.hpp"
@@ -88,6 +89,10 @@ uint32_t nthread_send_and_recv_turn(uint32_t curTurn, int turnDelta)
 		return 0;
 	}
 	while (curTurnsInTransit++ < gdwTurnsInTransit) {
+		const NetTickTelemetrySample telemetry = GetNetTelemetryAggregator().RollingSample();
+		const uint32_t resendLimit = dvlnet::GetRollbackState().MaxResendsInFlight(telemetry.rttMs, telemetry.dropPct, telemetry.resendPct);
+		if (curTurnsInTransit > resendLimit)
+			break;
 		const bool resent = curTurnsInTransit > 1;
 		GetNetTelemetryAggregator().RecordSend(resent);
 

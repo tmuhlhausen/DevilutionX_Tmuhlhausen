@@ -10,6 +10,7 @@
 #include <SDL_timer.h>
 #endif
 
+#include "guild/guild_mod_api.hpp"
 #include "multi.h"
 #include "player.h"
 
@@ -26,6 +27,7 @@ void ClearGuild()
 	ActiveGuild = {};
 	for (GuildMemberState &state : MemberStates)
 		state = {};
+	NotifyGuildHallChanged(ActiveGuild);
 }
 
 void RecountGuildState()
@@ -141,6 +143,7 @@ bool IsRoleAtLeast(MemberRole role, MemberRole minimumRole)
 void ResetGuildState()
 {
 	ClearGuild();
+	ResetGuildModHooks();
 	for (auto &timestamps : ActionTimestamps)
 		timestamps.fill(0);
 }
@@ -185,6 +188,8 @@ bool CreateGuild(uint8_t creatorPlayerId, std::string_view guildName)
 
 	SaveGuildMemberState(creatorPlayerId, ActiveGuild.guildId, MemberRole::Leader, PermissionsForRole(MemberRole::Leader), false);
 	RecountGuildState();
+	NotifyGuildHallChanged(ActiveGuild);
+	NotifyGuildMemberChanged(creatorPlayerId, MemberStates[creatorPlayerId]);
 	return true;
 }
 
@@ -199,6 +204,7 @@ bool InviteToGuild(uint8_t inviterPlayerId, uint8_t targetPlayerId)
 	if ((inviter.permissions & GuildPermissionInvite) == 0)
 		return false;
 	SaveGuildMemberState(targetPlayerId, inviter.guildId, MemberRole::None, GuildPermissionNone, true);
+	NotifyGuildMemberChanged(targetPlayerId, MemberStates[targetPlayerId]);
 	return true;
 }
 
@@ -208,6 +214,8 @@ bool JoinGuild(uint8_t playerId)
 		return false;
 	SaveGuildMemberState(playerId, MemberStates[playerId].guildId, MemberRole::Member, PermissionsForRole(MemberRole::Member), false);
 	RecountGuildState();
+	NotifyGuildHallChanged(ActiveGuild);
+	NotifyGuildMemberChanged(playerId, MemberStates[playerId]);
 	return true;
 }
 
@@ -221,6 +229,8 @@ bool LeaveGuild(uint8_t playerId)
 		TryTransferOwnership(playerId);
 	SaveGuildMemberState(playerId, {}, MemberRole::None, GuildPermissionNone, false);
 	RecountGuildState();
+	NotifyGuildHallChanged(ActiveGuild);
+	NotifyGuildMemberChanged(playerId, MemberStates[playerId]);
 	return true;
 }
 
@@ -240,6 +250,7 @@ bool PromoteGuildMember(uint8_t promoterPlayerId, uint8_t targetPlayerId)
 
 	target.role = MemberRole::Officer;
 	target.permissions = PermissionsForRole(target.role);
+	NotifyGuildMemberChanged(targetPlayerId, target);
 	return true;
 }
 
@@ -257,6 +268,8 @@ bool KickGuildMember(uint8_t kickerPlayerId, uint8_t targetPlayerId)
 
 	SaveGuildMemberState(targetPlayerId, {}, MemberRole::None, GuildPermissionNone, false);
 	RecountGuildState();
+	NotifyGuildHallChanged(ActiveGuild);
+	NotifyGuildMemberChanged(targetPlayerId, MemberStates[targetPlayerId]);
 	return true;
 }
 
@@ -274,11 +287,13 @@ void SaveGuildMemberState(uint8_t playerId, GuildId guildId, MemberRole role, ui
 	player.guildMemberState.role = role;
 	player.guildMemberState.permissions = permissions;
 	player.guildMemberState.invited = invited;
+	NotifyGuildMemberChanged(playerId, MemberStates[playerId]);
 }
 
 void ApplyGuildHallSnapshot(const GuildHallState &state)
 {
 	ActiveGuild = state;
+	NotifyGuildHallChanged(ActiveGuild);
 	if (!ActiveGuild.guildId.IsValid())
 		ClearGuild();
 }

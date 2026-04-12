@@ -1490,13 +1490,17 @@ void DrawNetworkTelemetryOverlay(const Surface &out)
 		return;
 
 	const NetTickTelemetrySample telemetry = GetNetTelemetryAggregator().RollingSample();
-	const std::string text = fmt::format("NET RTT {:.1f}ms JIT {:.1f}ms DROP {:.1f}% RESEND {:.1f}% DIV {} RB {:.2f}ms",
+	const std::string text = fmt::format("NET RTT {:.1f}/{:.1f}ms JIT95 {:.1f}ms DROP {:.1f}% RESEND {:.1f}% DIV {} RB {:.2f}ms A[{}{}{}]",
 	    telemetry.rttMs,
-	    telemetry.jitterMs,
+	    telemetry.rttP95Ms,
+	    telemetry.jitterP95Ms,
 	    telemetry.dropPct,
 	    telemetry.resendPct,
 	    telemetry.divergenceCount,
-	    telemetry.rollbackMs);
+	    telemetry.rollbackMs,
+	    telemetry.anomalyLatency ? "L" : "-",
+	    telemetry.anomalyDropBurst ? "D" : "-",
+	    telemetry.anomalyDivergence ? "V" : "-");
 	DrawString(out, text, Point { 8, 26 }, { .flags = UiFlags::ColorRed });
 }
 
