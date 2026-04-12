@@ -56,7 +56,7 @@ namespace {
 constexpr size_t MaxMissilesForSaveGame = 125;
 constexpr size_t PlayerWalkPathSizeForSaveGame = 25;
 constexpr uint8_t PlayerSaveFormatRevision = 2;
-constexpr uint8_t GuildProgressionPayloadVersion = 1;
+constexpr uint8_t GuildProgressionPayloadVersion = 2;
 constexpr uint8_t RaidProgressionPayloadVersion = 1;
 
 uint8_t giNumberQuests;
@@ -266,18 +266,41 @@ void LoadGuildProgressionPayload(LoadHelper &file)
 		return;
 
 	const uint8_t payloadVersion = file.NextLE<uint8_t>();
-	if (payloadVersion != GuildProgressionPayloadVersion)
+	if (payloadVersion != 1 && payloadVersion != GuildProgressionPayloadVersion)
 		return;
 
 	GuildProgressionPersistedState state {};
 	state.guildId.value = file.NextLE<uint32_t>();
 	for (uint32_t &counter : state.counters)
 		counter = file.NextLE<uint32_t>();
+	if (payloadVersion >= 2) {
+		for (uint32_t &counter : state.seasonCounterBaseline)
+			counter = file.NextLE<uint32_t>();
+	}
 	for (uint64_t &milestoneBits : state.completedMilestones)
 		milestoneBits = file.NextLE<uint64_t>();
 	state.usedDedupKeys = file.NextLE<uint16_t>();
 	for (uint64_t &dedupKey : state.dedupKeys)
 		dedupKey = file.NextLE<uint64_t>();
+	if (payloadVersion >= 2) {
+		for (uint64_t &claimDedupKey : state.claimDedupKeys)
+			claimDedupKey = file.NextLE<uint64_t>();
+		for (GuildRankingSnapshot &snapshot : state.rankingSnapshots) {
+			snapshot.seasonId = file.NextLE<uint32_t>();
+			snapshot.snapshotId = file.NextLE<uint32_t>();
+			snapshot.accumulatedActivity = file.NextLE<uint32_t>();
+			snapshot.tier = file.NextLE<uint16_t>();
+			snapshot.prestigePoints = file.NextLE<uint32_t>();
+		}
+		state.seasonId = file.NextLE<uint32_t>();
+		state.seasonResetIntervalWeeks = file.NextLE<uint32_t>();
+		state.nextSeasonResetWeek = file.NextLE<uint32_t>();
+		state.seasonTransitions = file.NextLE<uint32_t>();
+		state.prestigePoints = file.NextLE<uint32_t>();
+		state.prestigeLevel = file.NextLE<uint16_t>();
+		state.usedClaimDedupKeys = file.NextLE<uint16_t>();
+		state.usedRankingSnapshots = file.NextLE<uint8_t>();
+	}
 	ApplyGuildProgressionPersistedState(state);
 }
 
@@ -288,11 +311,30 @@ void SaveGuildProgressionPayload(SaveHelper &file)
 	file.WriteLE<uint32_t>(state.guildId.value);
 	for (uint32_t counter : state.counters)
 		file.WriteLE<uint32_t>(counter);
+	for (uint32_t counter : state.seasonCounterBaseline)
+		file.WriteLE<uint32_t>(counter);
 	for (uint64_t milestoneBits : state.completedMilestones)
 		file.WriteLE<uint64_t>(milestoneBits);
 	file.WriteLE<uint16_t>(state.usedDedupKeys);
 	for (uint64_t dedupKey : state.dedupKeys)
 		file.WriteLE<uint64_t>(dedupKey);
+	for (uint64_t dedupKey : state.claimDedupKeys)
+		file.WriteLE<uint64_t>(dedupKey);
+	for (const GuildRankingSnapshot &snapshot : state.rankingSnapshots) {
+		file.WriteLE<uint32_t>(snapshot.seasonId);
+		file.WriteLE<uint32_t>(snapshot.snapshotId);
+		file.WriteLE<uint32_t>(snapshot.accumulatedActivity);
+		file.WriteLE<uint16_t>(snapshot.tier);
+		file.WriteLE<uint32_t>(snapshot.prestigePoints);
+	}
+	file.WriteLE<uint32_t>(state.seasonId);
+	file.WriteLE<uint32_t>(state.seasonResetIntervalWeeks);
+	file.WriteLE<uint32_t>(state.nextSeasonResetWeek);
+	file.WriteLE<uint32_t>(state.seasonTransitions);
+	file.WriteLE<uint32_t>(state.prestigePoints);
+	file.WriteLE<uint16_t>(state.prestigeLevel);
+	file.WriteLE<uint16_t>(state.usedClaimDedupKeys);
+	file.WriteLE<uint8_t>(state.usedRankingSnapshots);
 }
 
 void LoadRaidProgressionPayload(LoadHelper &file)

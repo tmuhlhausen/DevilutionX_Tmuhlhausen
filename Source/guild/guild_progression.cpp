@@ -37,6 +37,17 @@ uint64_t HashGuildRewardKey(uint32_t guildId, uint32_t raidId, GuildActivityType
 	return hash;
 }
 
+uint32_t CalculateAccumulatedSeasonActivity()
+{
+	uint64_t total = 0;
+	for (size_t i = 0; i < GuildActivityTypeCount; i++) {
+		const uint32_t current = ProgressionState.counters[i];
+		const uint32_t baseline = ProgressionState.seasonCounterBaseline[i];
+		total += current >= baseline ? current - baseline : 0;
+	}
+	return static_cast<uint32_t>(std::min<uint64_t>(total, UINT32_MAX));
+}
+
 bool HasDedupKey(uint64_t dedupKey)
 {
 	const size_t count = std::min(static_cast<size_t>(ProgressionState.usedDedupKeys), ProgressionState.dedupKeys.size());
@@ -61,18 +72,62 @@ void AddDedupKey(uint64_t dedupKey)
 	ProgressionState.dedupKeys.back() = dedupKey;
 }
 
+bool HasClaimDedupKey(uint64_t dedupKey)
+{
+	const size_t count = std::min(static_cast<size_t>(ProgressionState.usedClaimDedupKeys), ProgressionState.claimDedupKeys.size());
+	for (size_t i = 0; i < count; i++) {
+		if (ProgressionState.claimDedupKeys[i] == dedupKey)
+			return true;
+	}
+	return false;
+}
+
+void AddClaimDedupKey(uint64_t dedupKey)
+{
+	if (HasClaimDedupKey(dedupKey))
+		return;
+
+	if (ProgressionState.usedClaimDedupKeys < ProgressionState.claimDedupKeys.size()) {
+		ProgressionState.claimDedupKeys[ProgressionState.usedClaimDedupKeys++] = dedupKey;
+		return;
+	}
+
+	std::rotate(ProgressionState.claimDedupKeys.begin(), ProgressionState.claimDedupKeys.begin() + 1, ProgressionState.claimDedupKeys.end());
+	ProgressionState.claimDedupKeys.back() = dedupKey;
+}
+
 void GrantDeterministicReward(const GuildRewardDefinition &definition, uint32_t raidId)
 {
 	const uint64_t dedupKey = HashGuildRewardKey(ProgressionState.guildId.value, raidId, definition.activity, definition.milestone, definition.rewardId);
 	if (HasDedupKey(dedupKey))
 		return;
 
+	const bool seasonLimited = true;
+	uint64_t claimDedupKey = dedupKey;
+	if (seasonLimited) {
+		claimDedupKey = HashGuildRewardKey(
+		    ProgressionState.guildId.value,
+		    ProgressionState.seasonId,
+		    definition.activity,
+		    definition.milestone,
+		    definition.rewardId);
+	}
+	if (HasClaimDedupKey(claimDedupKey))
+		return;
+
 	AddDedupKey(dedupKey);
+	AddClaimDedupKey(claimDedupKey);
 	GrantedRewards.push_back(GrantedGuildReward {
 	    dedupKey,
+	    claimDedupKey,
 	    definition.activity,
 	    definition.milestone,
 	    definition.rewardQuantity,
+	    GuildRewardKind::TokenCurrency,
+	    definition.rewardQuantity,
+	    CalculateGuildSeasonTier(),
+	    ProgressionState.seasonId,
+	    seasonLimited,
 	});
 }
 
@@ -108,7 +163,12 @@ GuildProgressionPersistedState GetGuildProgressionPersistedState()
 void ApplyGuildProgressionPersistedState(const GuildProgressionPersistedState &state)
 {
 	ProgressionState = state;
+	ProgressionState.seasonId = std::max(ProgressionState.seasonId, 1u);
+	ProgressionState.seasonResetIntervalWeeks = std::max(ProgressionState.seasonResetIntervalWeeks, 1u);
+	ProgressionState.nextSeasonResetWeek = std::max(ProgressionState.nextSeasonResetWeek, ProgressionState.seasonResetIntervalWeeks);
 	ProgressionState.usedDedupKeys = std::min<uint16_t>(ProgressionState.usedDedupKeys, ProgressionState.dedupKeys.size());
+	ProgressionState.usedClaimDedupKeys = std::min<uint16_t>(ProgressionState.usedClaimDedupKeys, ProgressionState.claimDedupKeys.size());
+	ProgressionState.usedRankingSnapshots = std::min<uint8_t>(ProgressionState.usedRankingSnapshots, ProgressionState.rankingSnapshots.size());
 }
 
 void EmitGuildActivityEvent(GuildId guildId, GuildActivityType activity, uint16_t amount, uint8_t guildLevel, uint32_t raidId)
@@ -139,6 +199,60 @@ void HandleRaidCompletionForGuild(uint32_t raidId, GuildId guildId, uint8_t guil
 const std::vector<GrantedGuildReward> &GetGrantedGuildRewards()
 {
 	return GrantedRewards;
+}
+
+uint16_t CalculateGuildSeasonTier()
+{
+	const uint32_t score = CalculateAccumulatedSeasonActivity();
+	if (score >= 600)
+		return 5;
+	if (score >= 300)
+		return 4;
+	if (score >= 150)
+		return 3;
+	if (score >= 50)
+		return 2;
+	return score > 0 ? 1 : 0;
+}
+
+void CaptureGuildRankingSnapshot(uint32_t snapshotId)
+{
+	GuildRankingSnapshot snapshot {};
+	snapshot.seasonId = ProgressionState.seasonId;
+	snapshot.snapshotId = snapshotId;
+	snapshot.accumulatedActivity = CalculateAccumulatedSeasonActivity();
+	snapshot.tier = CalculateGuildSeasonTier();
+	snapshot.prestigePoints = ProgressionState.prestigePoints;
+
+	if (ProgressionState.usedRankingSnapshots < ProgressionState.rankingSnapshots.size()) {
+		ProgressionState.rankingSnapshots[ProgressionState.usedRankingSnapshots++] = snapshot;
+		return;
+	}
+
+	std::rotate(ProgressionState.rankingSnapshots.begin(), ProgressionState.rankingSnapshots.begin() + 1, ProgressionState.rankingSnapshots.end());
+	ProgressionState.rankingSnapshots.back() = snapshot;
+}
+
+void AdvanceGuildSeasonIfNeeded(uint32_t currentWeek)
+{
+	if (ProgressionState.seasonResetIntervalWeeks == 0)
+		return;
+	if (ProgressionState.nextSeasonResetWeek == 0)
+		ProgressionState.nextSeasonResetWeek = ProgressionState.seasonResetIntervalWeeks;
+
+	while (currentWeek >= ProgressionState.nextSeasonResetWeek) {
+		const uint32_t seasonActivity = CalculateAccumulatedSeasonActivity();
+		ProgressionState.prestigePoints = std::min<uint32_t>(UINT32_MAX, ProgressionState.prestigePoints + seasonActivity);
+		const uint16_t prestigeFromPoints = static_cast<uint16_t>(std::min<uint32_t>(UINT16_MAX, ProgressionState.prestigePoints / 500));
+		ProgressionState.prestigeLevel = std::max(ProgressionState.prestigeLevel, prestigeFromPoints);
+
+		ProgressionState.seasonTransitions = std::min<uint32_t>(UINT32_MAX, ProgressionState.seasonTransitions + 1);
+		ProgressionState.seasonId = std::min<uint32_t>(UINT32_MAX, ProgressionState.seasonId + 1);
+		ProgressionState.seasonCounterBaseline = ProgressionState.counters;
+		ProgressionState.completedMilestones.fill(0);
+		ProgressionState.usedClaimDedupKeys = 0;
+		ProgressionState.nextSeasonResetWeek = std::min<uint32_t>(UINT32_MAX, ProgressionState.nextSeasonResetWeek + ProgressionState.seasonResetIntervalWeeks);
+	}
 }
 
 } // namespace devilution
