@@ -15,27 +15,14 @@ set(libdevilutionx_SRCS
   gamemenu.cpp
   gmenu.cpp
   guild/guild.cpp
-  guild/guild_mod_api.cpp
   guild/guild_progression.cpp
-  raid/raid_mod_api.cpp
   raid/raid_rules.cpp
   raid/raid_state.cpp
   raid/raid_routing.cpp
   raid/encounter/encounter_engine.cpp
+  raid/encounter/encounter_schema.cpp
+  raid/encounter/weekly_modifiers.cpp
   help.cpp
-=======
-  gamemenu.cpp
-  gmenu.cpp
-  guild/guild.cpp
-  guild/guild_mod_api.cpp
-  guild/guild_progression.cpp
-  raid/raid_mod_api.cpp
-  raid/raid_rules.cpp
-  raid/raid_state.cpp
-  raid/raid_routing.cpp
-  raid/encounter/encounter_engine.cpp
-  help.cpp
-
   hwcursor.cpp
   interfac.cpp
   inv.cpp

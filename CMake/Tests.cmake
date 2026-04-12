@@ -54,6 +54,9 @@ set(tests
   raid_progression_test
   raid_sync_test
   rollback_state_test
+  encounter_schema_test
+  encounter_engine_phase_test
+  weekly_modifier_test
 )
 set(standalone_tests
   codec_test
@@ -64,7 +67,6 @@ set(standalone_tests
   ini_test
   net_transport_factory_test
   net_chaos_test
-  net_sim_sync_test
   net_qos_test
   net_telemetry_trace_test
   net_transport_mode_test
