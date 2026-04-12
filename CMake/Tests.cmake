@@ -76,6 +76,7 @@ set(standalone_tests
   vision_test
   random_test
   render_graph_test
+  render_backend_contract_test
   rectangle_test
   static_vector_test
   str_cat_test
