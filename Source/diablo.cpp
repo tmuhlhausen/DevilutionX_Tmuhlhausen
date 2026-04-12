@@ -46,6 +46,7 @@
 #include "discord/discord.h"
 #include "dvlnet/net_transport_mode.hpp"
 #include "dvlnet/rollback_state.hpp"
+#include "dvlnet/net_telemetry.hpp"
 #include "doom.h"
 #include "encrypt.h"
 #include "engine/backbuffer_state.hpp"
@@ -1031,6 +1032,14 @@ void RunGameLoop(interface_mode uMsg)
 		if (game_loop(gbGameLoopStartup))
 			diablo_color_cyc_logic();
 		if (*GetOptions().Network.rollback) {
+			const NetTickTelemetrySample telemetry = GetNetTelemetryAggregator().RollingSample();
+			dvlnet::RollbackReplayPolicyProfile profile = dvlnet::RollbackReplayPolicyProfile::Balanced;
+			if (telemetry.anomalyDropBurst || telemetry.anomalyLatency)
+				profile = dvlnet::RollbackReplayPolicyProfile::Conservative;
+			else if (telemetry.rttMs < 90.0F && telemetry.dropPct < 1.5F && telemetry.resendPct < 2.5F)
+				profile = dvlnet::RollbackReplayPolicyProfile::Aggressive;
+			dvlnet::GetRollbackState().SetReplayPolicyProfile(profile);
+
 			uint32_t simStateHash = 2166136261u;
 			for (const Player &player : Players) {
 				if (!player.isActive())
@@ -1049,6 +1058,7 @@ void RunGameLoop(interface_mode uMsg)
 			nthread_RecordSimStateHash(simStateHash);
 			const std::vector<std::byte> snapshot = CaptureRollbackSnapshot();
 			dvlnet::GetRollbackState().StoreSnapshot(SimTickCount, snapshot, simStateHash);
+			const uint32_t rollbackStart = SDL_GetTicks();
 			dvlnet::GetRollbackState().HandleCorrection(SimTickCount, simStateHash, SimTickCount,
 			    [](std::span<const std::byte> snapshotBytes) {
 				    return RestoreRollbackSnapshot(snapshotBytes);
@@ -1056,6 +1066,7 @@ void RunGameLoop(interface_mode uMsg)
 			    [](std::span<const std::byte> /*input*/) {
 				    // Replay integration for authoritative correction is intentionally conservative for now.
 			    });
+			GetNetTelemetryAggregator().RecordRollbackMs(static_cast<float>(SDL_GetTicks() - rollbackStart));
 		}
 		gbGameLoopStartup = false;
 		if (drawGame)

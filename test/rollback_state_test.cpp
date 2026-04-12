@@ -71,4 +71,24 @@ TEST(RollbackStateTest, DivergenceDetectionPath)
 	EXPECT_FALSE(rollback.DetectDivergence(999, 0x2222));
 }
 
+TEST(RollbackStateTest, ReplayProfilesAdjustAdaptiveThresholds)
+{
+	RollbackState rollback(8);
+	rollback.SetReplayPolicyProfile(RollbackReplayPolicyProfile::Aggressive);
+	const RollbackAdaptiveThresholds aggressive = rollback.ComputeAdaptiveThresholds(70.0F, 0.5F, 1.0F);
+	rollback.SetReplayPolicyProfile(RollbackReplayPolicyProfile::Conservative);
+	const RollbackAdaptiveThresholds conservative = rollback.ComputeAdaptiveThresholds(70.0F, 0.5F, 1.0F);
+	EXPECT_GT(aggressive.maxCorrectionDepth, conservative.maxCorrectionDepth);
+	EXPECT_GT(aggressive.maxResendsInFlight, conservative.maxResendsInFlight);
+}
+
+TEST(RollbackStateTest, HighLossClampsResendThreshold)
+{
+	RollbackState rollback(8);
+	rollback.SetReplayPolicyProfile(RollbackReplayPolicyProfile::Aggressive);
+	const RollbackAdaptiveThresholds thresholds = rollback.ComputeAdaptiveThresholds(320.0F, 12.0F, 20.0F);
+	EXPECT_EQ(thresholds.maxResendsInFlight, 1U);
+	EXPECT_LT(thresholds.maxCorrectionDepth, rollback.ReplayPolicy().maxCorrectionDepth);
+}
+
 } // namespace devilution::dvlnet
