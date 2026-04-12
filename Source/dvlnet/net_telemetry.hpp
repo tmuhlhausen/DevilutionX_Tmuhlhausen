@@ -4,6 +4,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace devilution {
 
@@ -20,6 +21,12 @@ struct NetTickTelemetrySample {
 	float resendPct = 0.0F;
 	uint32_t divergenceCount = 0;
 	float rollbackMs = 0.0F;
+	float rttP50Ms = 0.0F;
+	float rttP95Ms = 0.0F;
+	float jitterP95Ms = 0.0F;
+	bool anomalyLatency = false;
+	bool anomalyDropBurst = false;
+	bool anomalyDivergence = false;
 };
 
 class NetTelemetryAggregator {
@@ -51,6 +58,11 @@ private:
 	float rollbackMsThisTick_ = 0.0F;
 	bool traceEnabled_ = false;
 	NetTraceFormat traceFormat_ = NetTraceFormat::Jsonl;
+	static constexpr size_t PercentileWindowSize = 64;
+	std::vector<float> rttWindow_;
+	std::vector<float> jitterWindow_;
+	void PushWindowSample(std::vector<float> &window, float value);
+	[[nodiscard]] float Percentile(const std::vector<float> &window, float fraction) const;
 };
 
 NetTelemetryAggregator &GetNetTelemetryAggregator();

@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <charconv>
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <fstream>
@@ -75,7 +76,7 @@ void NetTelemetryAggregator::SetTraceEnabled(bool enabled, NetTraceFormat format
 		return;
 	TraceStream().open(format == NetTraceFormat::Jsonl ? "net_tick_trace.jsonl" : "net_tick_trace.tsv", std::ios::out | std::ios::trunc);
 	if (format == NetTraceFormat::Tsv && TraceStream().is_open()) {
-		TraceStream() << "tick\trtt_ms\tjitter_ms\tdrop_pct\tresend_pct\tdivergence\trollback_ms\n";
+		TraceStream() << "tick\trtt_ms\tjitter_ms\tdrop_pct\tresend_pct\tdivergence\trollback_ms\trtt_p50_ms\trtt_p95_ms\tjitter_p95_ms\tanom_latency\tanom_drop\tanom_div\n";
 	}
 }
 
@@ -91,6 +92,14 @@ void NetTelemetryAggregator::FlushTick()
 		sample.dropPct = static_cast<float>(dropsThisTick_) * 100.0F / static_cast<float>(sendsThisTick_);
 		sample.resendPct = static_cast<float>(resendsThisTick_) * 100.0F / static_cast<float>(sendsThisTick_);
 	}
+	PushWindowSample(rttWindow_, sample.rttMs);
+	PushWindowSample(jitterWindow_, sample.jitterMs);
+	sample.rttP50Ms = Percentile(rttWindow_, 0.50F);
+	sample.rttP95Ms = Percentile(rttWindow_, 0.95F);
+	sample.jitterP95Ms = Percentile(jitterWindow_, 0.95F);
+	sample.anomalyLatency = hasRtt_ && sample.rttMs > (sample.rttP95Ms + 25.0F);
+	sample.anomalyDropBurst = sample.dropPct > std::max(5.0F, rolling_.dropPct + 3.0F);
+	sample.anomalyDivergence = sample.divergenceCount > std::max(2U, rolling_.divergenceCount + 1U);
 
 	if (tick_ == 0) {
 		rolling_ = sample;
@@ -101,6 +110,12 @@ void NetTelemetryAggregator::FlushTick()
 		Smooth(rolling_.resendPct, sample.resendPct);
 		rolling_.divergenceCount = sample.divergenceCount;
 		Smooth(rolling_.rollbackMs, sample.rollbackMs);
+		Smooth(rolling_.rttP50Ms, sample.rttP50Ms);
+		Smooth(rolling_.rttP95Ms, sample.rttP95Ms);
+		Smooth(rolling_.jitterP95Ms, sample.jitterP95Ms);
+		rolling_.anomalyLatency = sample.anomalyLatency;
+		rolling_.anomalyDropBurst = sample.anomalyDropBurst;
+		rolling_.anomalyDivergence = sample.anomalyDivergence;
 		rolling_.tick = sample.tick;
 	}
 
@@ -113,6 +128,23 @@ void NetTelemetryAggregator::FlushTick()
 	dropsThisTick_ = 0;
 	divergenceThisTick_ = 0;
 	rollbackMsThisTick_ = 0.0F;
+}
+
+void NetTelemetryAggregator::PushWindowSample(std::vector<float> &window, float value)
+{
+	if (window.size() >= PercentileWindowSize)
+		window.erase(window.begin());
+	window.push_back(value);
+}
+
+float NetTelemetryAggregator::Percentile(const std::vector<float> &window, float fraction) const
+{
+	if (window.empty())
+		return 0.0F;
+	std::vector<float> sorted = window;
+	std::sort(sorted.begin(), sorted.end());
+	const size_t index = static_cast<size_t>(std::clamp(fraction, 0.0F, 1.0F) * static_cast<float>(sorted.size() - 1));
+	return sorted[index];
 }
 
 void NetTelemetryAggregator::NextTick()
@@ -166,34 +198,46 @@ NetTickTelemetrySample NetTelemetryAggregator::RollingSample() const
 std::string NetTelemetryAggregator::FormatLine(const NetTickTelemetrySample &sample, NetTraceFormat format)
 {
 	if (format == NetTraceFormat::Tsv) {
-		return fmt::format("{}\t{:.2f}\t{:.2f}\t{:.2f}\t{:.2f}\t{}\t{:.2f}",
+		return fmt::format("{}\t{:.2f}\t{:.2f}\t{:.2f}\t{:.2f}\t{}\t{:.2f}\t{:.2f}\t{:.2f}\t{:.2f}\t{}\t{}\t{}",
 		    sample.tick,
 		    sample.rttMs,
 		    sample.jitterMs,
 		    sample.dropPct,
 		    sample.resendPct,
 		    sample.divergenceCount,
-		    sample.rollbackMs);
+		    sample.rollbackMs,
+		    sample.rttP50Ms,
+		    sample.rttP95Ms,
+		    sample.jitterP95Ms,
+		    sample.anomalyLatency ? 1 : 0,
+		    sample.anomalyDropBurst ? 1 : 0,
+		    sample.anomalyDivergence ? 1 : 0);
 	}
-	return fmt::format("{{\"tick\":{},\"rtt_ms\":{:.2f},\"jitter_ms\":{:.2f},\"drop_pct\":{:.2f},\"resend_pct\":{:.2f},\"divergence\":{},\"rollback_ms\":{:.2f}}}",
+	return fmt::format("{{\"tick\":{},\"rtt_ms\":{:.2f},\"jitter_ms\":{:.2f},\"drop_pct\":{:.2f},\"resend_pct\":{:.2f},\"divergence\":{},\"rollback_ms\":{:.2f},\"rtt_p50_ms\":{:.2f},\"rtt_p95_ms\":{:.2f},\"jitter_p95_ms\":{:.2f},\"anom_latency\":{},\"anom_drop\":{},\"anom_div\":{}}}",
 	    sample.tick,
 	    sample.rttMs,
 	    sample.jitterMs,
 	    sample.dropPct,
 	    sample.resendPct,
 	    sample.divergenceCount,
-	    sample.rollbackMs);
+	    sample.rollbackMs,
+	    sample.rttP50Ms,
+	    sample.rttP95Ms,
+	    sample.jitterP95Ms,
+	    sample.anomalyLatency ? 1 : 0,
+	    sample.anomalyDropBurst ? 1 : 0,
+	    sample.anomalyDivergence ? 1 : 0);
 }
 
 std::optional<NetTickTelemetrySample> NetTelemetryAggregator::ParseLine(std::string_view line, NetTraceFormat format)
 {
 	NetTickTelemetrySample sample;
 	if (format == NetTraceFormat::Tsv) {
-		std::string_view fields[7];
-		for (int i = 0; i < 7; ++i) {
+		std::string_view fields[13];
+		for (int i = 0; i < 13; ++i) {
 			const size_t split = line.find('\t');
 			if (split == std::string_view::npos) {
-				if (i != 6)
+				if (i != 12)
 					return std::nullopt;
 				fields[i] = line;
 				break;
@@ -203,25 +247,46 @@ std::optional<NetTickTelemetrySample> NetTelemetryAggregator::ParseLine(std::str
 		}
 		if (!ParseUInt64(fields[0], sample.tick) || !ParseFloat(fields[1], sample.rttMs) || !ParseFloat(fields[2], sample.jitterMs)
 		    || !ParseFloat(fields[3], sample.dropPct) || !ParseFloat(fields[4], sample.resendPct) || !ParseUInt32(fields[5], sample.divergenceCount)
-		    || !ParseFloat(fields[6], sample.rollbackMs)) {
+		    || !ParseFloat(fields[6], sample.rollbackMs) || !ParseFloat(fields[7], sample.rttP50Ms) || !ParseFloat(fields[8], sample.rttP95Ms)
+		    || !ParseFloat(fields[9], sample.jitterP95Ms)) {
 			return std::nullopt;
 		}
+		uint32_t anomLatency = 0;
+		uint32_t anomDrop = 0;
+		uint32_t anomDiv = 0;
+		if (!ParseUInt32(fields[10], anomLatency) || !ParseUInt32(fields[11], anomDrop) || !ParseUInt32(fields[12], anomDiv))
+			return std::nullopt;
+		sample.anomalyLatency = anomLatency != 0;
+		sample.anomalyDropBurst = anomDrop != 0;
+		sample.anomalyDivergence = anomDiv != 0;
 		return sample;
 	}
 
 	unsigned long long tick = 0;
+	unsigned int anomLatency = 0;
+	unsigned int anomDrop = 0;
+	unsigned int anomDiv = 0;
 	int matched = std::sscanf(std::string(line).c_str(),
-	    "{\"tick\":%llu,\"rtt_ms\":%f,\"jitter_ms\":%f,\"drop_pct\":%f,\"resend_pct\":%f,\"divergence\":%u,\"rollback_ms\":%f}",
+	    "{\"tick\":%llu,\"rtt_ms\":%f,\"jitter_ms\":%f,\"drop_pct\":%f,\"resend_pct\":%f,\"divergence\":%u,\"rollback_ms\":%f,\"rtt_p50_ms\":%f,\"rtt_p95_ms\":%f,\"jitter_p95_ms\":%f,\"anom_latency\":%u,\"anom_drop\":%u,\"anom_div\":%u}",
 	    &tick,
 	    &sample.rttMs,
 	    &sample.jitterMs,
 	    &sample.dropPct,
 	    &sample.resendPct,
 	    &sample.divergenceCount,
-	    &sample.rollbackMs);
-	if (matched != 7)
+	    &sample.rollbackMs,
+	    &sample.rttP50Ms,
+	    &sample.rttP95Ms,
+	    &sample.jitterP95Ms,
+	    &anomLatency,
+	    &anomDrop,
+	    &anomDiv);
+	if (matched != 13)
 		return std::nullopt;
 	sample.tick = tick;
+	sample.anomalyLatency = anomLatency != 0;
+	sample.anomalyDropBurst = anomDrop != 0;
+	sample.anomalyDivergence = anomDiv != 0;
 	return sample;
 }
 
