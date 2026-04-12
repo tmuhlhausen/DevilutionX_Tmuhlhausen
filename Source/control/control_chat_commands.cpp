@@ -15,7 +15,10 @@
 #include "inv.h"
 #include "levels/setmaps.h"
 #include "msg.h"
+#include "guild/guild_mod_api.hpp"
 #include "raid/raid.hpp"
+#include "raid/raid_mod_api.hpp"
+#include "raid/raid_progression.hpp"
 #include "storm/storm_net.hpp"
 #include "utils/algorithm/container.hpp"
 #include "utils/log.hpp"
@@ -364,6 +367,61 @@ std::string TextCmdRaid(const std::string_view parameter)
 	return _("Usage: /raid <create|invite|join|ready|start|status|reset> [player]");
 }
 
+std::string TextCmdOps(const std::string_view parameter)
+{
+	const std::string param = AsciiStrToLower(parameter);
+	if (param.empty())
+		return _("Usage: /ops <snapshot|raiddiag|repairprog>");
+
+	if (param == "snapshot") {
+		const RaidInstanceState raidState = GetActiveRaidState();
+		const GuildHallState guildState = GetGuildHallState();
+		const RaidModCompatibilityStatus raidCompat = GetRaidModCompatibilityStatus();
+		const GuildModCompatibilityStatus guildCompat = GetGuildModCompatibilityStatus();
+		return StrCat(
+		    _("Ops snapshot"),
+		    "\n",
+		    _("Raid phase: "), GetRaidPhaseLabel(raidState.phase),
+		    "\n",
+		    _("Raid sequence: "), raidState.sequence,
+		    "\n",
+		    _("Guild id: "), guildState.guildId.value,
+		    "\n",
+		    _("Guild members: "), static_cast<int>(guildState.memberCount),
+		    "\n",
+		    _("Raid API compatible: "), raidCompat.compatible ? "yes" : "no", " (v", raidCompat.requestedVersion, " -> v", raidCompat.activeVersion, ")",
+		    "\n",
+		    _("Guild API compatible: "), guildCompat.compatible ? "yes" : "no", " (v", guildCompat.requestedVersion, " -> v", guildCompat.activeVersion, ")");
+	}
+
+	if (param == "raiddiag") {
+		const RaidInstanceState state = GetActiveRaidState();
+		return StrCat(
+		    _("Raid diagnostics"),
+		    "\n",
+		    _("Raid id: "), state.raidId.value,
+		    "\n",
+		    _("Difficulty: "), static_cast<int>(state.difficulty),
+		    "\n",
+		    _("Members joined: "), static_cast<int>(GetRaidMemberCount(state)),
+		    "\n",
+		    _("Members ready: "), static_cast<int>(GetRaidReadyCount(state)),
+		    "\n",
+		    _("Revision/Sequence: "), state.snapshotRevision, "/", state.sequence,
+		    "\n",
+		    _("Lockout expiration tick: "), state.lockoutExpirationTick);
+	}
+
+	if (param == "repairprog") {
+		ClearRaidCheckpoint(RaidDifficulty::Normal);
+		ClearRaidCheckpoint(RaidDifficulty::Nightmare);
+		ClearRaidCheckpoint(RaidDifficulty::Hell);
+		return _("Progression repair complete: cleared raid checkpoints for all difficulties.");
+	}
+
+	return _("Usage: /ops <snapshot|raiddiag|repairprog>");
+}
+
 std::vector<TextCmdItem> TextCmdList = {
 	{ "/help", N_("Prints help overview or help for a specific command."), N_("[command]"), &TextCmdHelp },
 	{ "/arena", N_("Enter a PvP Arena."), N_("<arena-number>"), &TextCmdArena },
@@ -372,6 +430,7 @@ std::vector<TextCmdItem> TextCmdList = {
 	{ "/seedinfo", N_("Show seed infos for current level."), "", &TextCmdLevelSeed },
 	{ "/ping", N_("Show latency statistics for another player."), N_("<player name>"), &TextCmdPing },
 	{ "/raid", N_("Manage raid lobby actions and status."), N_("<create|invite|join|ready|start|status|reset> [player]"), &TextCmdRaid },
+	{ "/ops", N_("Operator tools for telemetry and raid/guild diagnostics."), N_("<snapshot|raiddiag|repairprog>"), &TextCmdOps },
 };
 
 } // namespace
