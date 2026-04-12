@@ -5,6 +5,7 @@
 
 #include "guild/guild_progression.hpp"
 #include "player.h"
+#include "raid/raid_mod_api.hpp"
 #include "raid/raid_rules.hpp"
 
 namespace devilution {
@@ -40,11 +41,13 @@ uint32_t PlayerBit(uint8_t playerId)
 void InitializeRaidSubsystem()
 {
 	ResetActiveRaidState();
+	ResetRaidModHooks();
 }
 
 void ResetRaidSubsystem()
 {
 	ResetActiveRaidState();
+	ResetRaidModHooks();
 }
 
 bool AdvanceRaidStateSequence(RaidInstanceState &state)
@@ -125,6 +128,8 @@ void ResetRaid(RaidInstanceState &state, uint32_t newInstanceSeed)
 	state.bossStates.fill(RaidEncounterState::NotStarted);
 	state.timersMs.fill(0);
 	AdvanceRaidStateSequence(state);
+	NotifyRaidReset(state);
+	NotifyRaidStateChanged(state);
 }
 
 void ResetActiveRaidState()
@@ -144,6 +149,7 @@ bool ApplyActiveRaidStateSnapshot(const RaidInstanceState &state)
 	if (state.snapshotRevision < ActiveRaid.snapshotRevision)
 		return false;
 	ActiveRaid = state;
+	NotifyRaidStateChanged(ActiveRaid);
 	return true;
 }
 
@@ -161,7 +167,10 @@ bool ApplyEncounterEvent(RaidInstanceState &state, const RaidEncounterEvent &eve
 	state.checkpointBits |= event.checkpointBitsToSet;
 	if (event.updateTimers)
 		state.timersMs = event.timersMs;
-	return AdvanceRaidStateSequence(state);
+	const bool advanced = AdvanceRaidStateSequence(state);
+	if (advanced)
+		NotifyRaidStateChanged(state);
+	return advanced;
 }
 
 bool CompleteRaid(RaidInstanceState &state, uint32_t lockoutExpirationTick)
@@ -177,7 +186,12 @@ bool CompleteRaid(RaidInstanceState &state, uint32_t lockoutExpirationTick)
 	const GuildId guildId { ActiveGuildId };
 	const uint8_t guildLevel = ResolveGuildLevel(guildId);
 	HandleRaidCompletionForGuild(state.raidId.value, guildId, guildLevel, static_cast<uint8_t>(state.bossStates.size()));
-	return AdvanceRaidStateSequence(state);
+	const bool advanced = AdvanceRaidStateSequence(state);
+	if (advanced) {
+		NotifyRaidCompleted(state);
+		NotifyRaidStateChanged(state);
+	}
+	return advanced;
 }
 
 bool FailRaid(RaidInstanceState &state, uint32_t lockoutExpirationTick)
@@ -189,7 +203,12 @@ bool FailRaid(RaidInstanceState &state, uint32_t lockoutExpirationTick)
 	state.result = RaidResult::Failure;
 	state.lockout = RaidLockout::Active;
 	state.lockoutExpirationTick = lockoutExpirationTick;
-	return AdvanceRaidStateSequence(state);
+	const bool advanced = AdvanceRaidStateSequence(state);
+	if (advanced) {
+		NotifyRaidFailed(state);
+		NotifyRaidStateChanged(state);
+	}
+	return advanced;
 }
 
 } // namespace devilution
