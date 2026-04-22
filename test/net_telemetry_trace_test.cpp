@@ -48,6 +48,46 @@ TEST(NetTelemetryTraceTest, RejectsMalformedRecords)
 {
 	EXPECT_FALSE(NetTelemetryAggregator::ParseLine("nope", NetTraceFormat::Jsonl).has_value());
 	EXPECT_FALSE(NetTelemetryAggregator::ParseLine("1\t2\t3", NetTraceFormat::Tsv).has_value());
+	EXPECT_FALSE(NetTelemetryAggregator::ParseLine("{\"tick\":1}", NetTraceFormat::Jsonl).has_value());
+	EXPECT_FALSE(NetTelemetryAggregator::ParseLine("1\t2\t3\t4\t5\t6\t7\t8\t9\t10\t11\t12\t13\t14", NetTraceFormat::Tsv).has_value());
+}
+
+TEST(NetTelemetryTraceTest, FormatAndParseRoundTripDeterministically)
+{
+	const NetTickTelemetrySample input {
+		.tick = 99,
+		.rttMs = 44.75F,
+		.jitterMs = 3.25F,
+		.dropPct = 0.5F,
+		.resendPct = 7.25F,
+		.divergenceCount = 2,
+		.rollbackMs = 6.5F,
+		.rttP50Ms = 42.0F,
+		.rttP95Ms = 54.0F,
+		.jitterP95Ms = 8.5F,
+		.anomalyLatency = true,
+		.anomalyDropBurst = false,
+		.anomalyDivergence = true,
+	};
+
+	const std::string jsonl = NetTelemetryAggregator::FormatLine(input, NetTraceFormat::Jsonl);
+	const std::optional<NetTickTelemetrySample> jsonlParsed = NetTelemetryAggregator::ParseLine(jsonl, NetTraceFormat::Jsonl);
+	ASSERT_TRUE(jsonlParsed.has_value());
+	EXPECT_EQ(jsonlParsed->tick, input.tick);
+	EXPECT_FLOAT_EQ(jsonlParsed->rttMs, input.rttMs);
+	EXPECT_FLOAT_EQ(jsonlParsed->resendPct, input.resendPct);
+	EXPECT_EQ(jsonlParsed->divergenceCount, input.divergenceCount);
+	EXPECT_TRUE(jsonlParsed->anomalyLatency);
+	EXPECT_FALSE(jsonlParsed->anomalyDropBurst);
+	EXPECT_TRUE(jsonlParsed->anomalyDivergence);
+
+	const std::string tsv = NetTelemetryAggregator::FormatLine(input, NetTraceFormat::Tsv);
+	const std::optional<NetTickTelemetrySample> tsvParsed = NetTelemetryAggregator::ParseLine(tsv, NetTraceFormat::Tsv);
+	ASSERT_TRUE(tsvParsed.has_value());
+	EXPECT_EQ(tsvParsed->tick, input.tick);
+	EXPECT_FLOAT_EQ(tsvParsed->rollbackMs, input.rollbackMs);
+	EXPECT_FLOAT_EQ(tsvParsed->rttP95Ms, input.rttP95Ms);
+	EXPECT_FLOAT_EQ(tsvParsed->jitterP95Ms, input.jitterP95Ms);
 }
 
 TEST(NetTelemetryTraceTest, PercentilesAndAnomalyMarkersTrackSpikes)

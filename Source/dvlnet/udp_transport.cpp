@@ -19,6 +19,8 @@
 #include <unistd.h>
 #endif
 
+#include "dvlnet/net_telemetry.hpp"
+
 namespace devilution {
 namespace {
 
@@ -201,11 +203,14 @@ tl::expected<std::size_t, std::string> UdpTransport::Send(NetPacket packet)
 {
 	if (!impl_->isOpen)
 		return tl::unexpected("transport is closed");
+	GetNetTelemetryAggregator().RecordSend(false);
 
 	const int sent = sendto(impl_->socket, reinterpret_cast<const char *>(packet.data.data()), static_cast<int>(packet.data.size()), 0,
 	    reinterpret_cast<const sockaddr *>(&impl_->loopbackDestination), sizeof(impl_->loopbackDestination));
-	if (sent < 0)
+	if (sent < 0) {
+		GetNetTelemetryAggregator().RecordDrop();
 		return tl::unexpected("failed to send UDP packet: " + GetLastSocketError());
+	}
 	return static_cast<std::size_t>(sent);
 }
 
@@ -225,6 +230,8 @@ tl::expected<std::size_t, std::string> UdpTransport::PollReceive(std::span<uint8
 		return tl::unexpected("failed to receive UDP packet: " + GetLastSocketError());
 	}
 	const std::size_t bytesToCopy = std::min<std::size_t>(destination.size(), static_cast<std::size_t>(received));
+	if (bytesToCopy < static_cast<std::size_t>(received))
+		GetNetTelemetryAggregator().RecordDrop();
 	std::copy_n(socketBuffer.begin(), bytesToCopy, destination.begin());
 	return bytesToCopy;
 }
