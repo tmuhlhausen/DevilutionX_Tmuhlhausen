@@ -100,27 +100,29 @@ Phase 1 establishes a deterministic raid core, rollback-safe networking behavior
 ### Contributor entry map
 - Start: `README.md` (project orientation, build prerequisites).
 - Build details: `docs/building.md` (platform-specific setup and build invocations).
-- Key tests to run first:
+- Key tests to run first (core Phase-1 verification targets from `CMake/Tests.cmake`):
   - `test/raid_state_test.cpp`
-    - Why this test matters (Track 1 / Acceptance A): Validates authoritative raid lifecycle transitions, invalid-edge rejection, and replay-safe terminal state convergence.
-  - `test/raid_progression_test.cpp`
-    - Why this test matters (Track 1 / Acceptance C): Verifies reward grant identity/dedup logic across first-grant, duplicate, reconnect, and replay paths.
+    - Why this test matters (Track 1 / P1-RAID-A): Validates authoritative raid lifecycle transitions, invalid-edge rejection, and replay-safe terminal state convergence.
   - `test/raid_protocol_test.cpp`
-    - Why this test matters (Track 1 / Acceptance A-B): Confirms deterministic protocol handling for raid state/rules decisions and lockout-sensitive entry flows.
+    - Why this test matters (Track 1 / P1-RAID-B, P1-RAID-C): Confirms deterministic protocol behavior for lockout-sensitive entry/reconnect flows and progression events.
   - `test/raid_sync_test.cpp`
-    - Why this test matters (Track 1 / Acceptance A): Ensures host/client raid synchronization preserves deterministic transition outcomes.
+    - Why this test matters (Track 1 / P1-RAID-A, P1-RAID-B; Track 2 / P1-NET-A): Ensures host/client synchronization preserves deterministic transitions and rollback-state parity.
+  - `test/raid_progression_test.cpp`
+    - Why this test matters (Track 1 / P1-RAID-C): Verifies reward grant identity and dedup semantics across first-grant, duplicate, reconnect, and replay paths.
   - `test/encounter_schema_test.cpp`
-    - Why this test matters (Track 1 / Acceptance C): Guards encounter + loot schema validity so malformed reward payloads cannot bypass dedup-safe progression rules.
+    - Why this test matters (Track 1 / P1-ENCOUNTER-A): Guards encounter + loot schema validity, including malformed reward payload rejection.
   - `test/encounter_engine_phase_test.cpp`
-    - Why this test matters (Track 1 / Acceptance A): Validates scripted boss phase transitions, condition gating, and deterministic fail/rollback behavior.
+    - Why this test matters (Track 1 / P1-ENCOUNTER-B): Validates scripted boss phase links, condition gates, and deterministic fail-state/rollback behavior.
+  - `test/weekly_modifier_test.cpp`
+    - Why this test matters (Track 1 / P1-ENCOUNTER-B): Verifies deterministic encounter-affecting modifier application so phase logic stays stable across runs.
   - `test/rollback_state_test.cpp`
-    - Why this test matters (Track 2 / Invariants A-B): Covers divergence detection monotonicity and correction replay safety/idempotence boundaries.
+    - Why this test matters (Track 2 / P1-NET-A, P1-NET-B): Covers divergence detection monotonicity and correction replay safety/idempotence boundaries.
   - `test/net_telemetry_trace_test.cpp`
-    - Why this test matters (Track 2 / Invariant C): Confirms telemetry trace parse/format round-trip consistency and structured handling of malformed data.
+    - Why this test matters (Track 2 / P1-NET-C): Confirms telemetry trace parse/format round-trip consistency and structured malformed-field errors.
   - `test/net_chaos_test.cpp`
-    - Why this test matters (Track 2 / Invariant B): Stress-tests rollback correction behavior under reordering/loss-like chaos to protect replay safety guarantees.
+    - Why this test matters (Track 2 / P1-NET-B): Stress-tests rollback correction behavior under reordering/loss-like chaos to protect replay safety guarantees.
   - `test/net_qos_test.cpp`
-    - Why this test matters (Track 2 / Invariants A-C): Validates QoS classification/handling so divergence signals and telemetry remain actionable under network pressure.
+    - Why this test matters (Track 2 / P1-NET-A, P1-NET-C): Validates QoS behavior so divergence signals and telemetry remain actionable under network pressure.
 
 ### DX outcomes
 - New contributors can move from clone to first targeted test run with a single, documented path.
