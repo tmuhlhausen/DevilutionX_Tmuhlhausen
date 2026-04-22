@@ -18,6 +18,15 @@
 - A milestone item may only be marked done when it reaches **Feature Operational**.
 - All status lines below explicitly carry one of: `Scaffold Completed` or `Feature Operational`.
 
+### Progress Classification Guardrails (Required)
+- **Scaffold Completed is NOT counted as delivered functionality.** It can count only toward readiness, never toward milestone completion.
+- **Feature Operational is the only status that can satisfy milestone closure and release-readiness dashboards.**
+- Every checked item (`[x]`) must carry:
+  1) module path(s),
+  2) expected test file + concrete test case name,
+  3) a measurable pass condition (e.g., fallback path, deterministic ordering, envelope bounds).
+- If any of the three fields are missing, reclassify the item to **Scaffold Completed** until evidence is added.
+
 ## Current code map (canonical netcode locations)
 
 - **Current netcode (authoritative now):** `Source/dvlnet/*`.
@@ -37,13 +46,13 @@
 ## 1) Networking Pipeline Rework (NOVA-NET)
 
 ### 1.1 Transport Abstraction (Additive)
-- [x] **Scaffold Completed**: Introduce a transport interface (`INetTransport`) with adapters for:
+- [x] **Scaffold Completed**: Introduce a transport interface (`INetTransport`) with adapters for *(Module: `Source/dvlnet/net_transport.hpp` | Expected Test: `test/net_transport_factory_test.cpp::NetTransportFactoryTest.*`)*:
   - [ ] UDP (baseline)
   - [ ] QUIC (reliable streams + datagrams)
-  - [x] **Feature Operational**: Local loopback simulation mode.
+  - [x] **Feature Operational**: Local loopback simulation mode *(Module: `Source/dvlnet/sim_transport.hpp` | Expected Test: `test/net_transport_factory_test.cpp::NetTransportFactoryTest.SimulationTransportRoundTripsPackets`)*.
   - Acceptance Criterion *(Path: `dvlnet`, Stage: 0)*: `Source/dvlnet/sim_transport.hpp` handles send/recv with deterministic ordering under configured chaos seed; validated by `test/net_transport_factory_test.cpp` (`NetTransportFactoryTest.SimulationTransportRoundTripsPackets`).
   - Acceptance Criterion *(Path: `dvlnet`, Stage: 0)*: `Source/dvlnet/net_transport.hpp` defines open/send/poll-receive/close contract used by all adapters; validated by `test/net_transport_factory_test.cpp` (`NetTransportFactoryTest.{SimulationTransportRoundTripsPackets,UdpTransportBindsLoopbackAndRoundTripsPackets,QuicTransportStaysExperimentalWithCapabilityError}`).
-- [x] **Feature Operational**: Add runtime transport selection (`--net-transport=udp|quic|sim`).
+- [x] **Feature Operational**: Add runtime transport selection (`--net-transport=udp|quic|sim`) *(Module: `Source/diablo.cpp` | Expected Test: `test/net_transport_mode_test.cpp::NetTransportModeTest.ParsesSupportedModes`)*.
   - Acceptance Criterion *(Path: `dvlnet`, Stage: 0)*: `Source/diablo.cpp` parses and applies CLI transport mode with explicit fallback to `udp`; validated by `test/net_transport_mode_test.cpp` (`NetTransportModeTest.ParsesSupportedModes`).
 
 ### 1.2 Tick-Accurate Deterministic Core
@@ -63,9 +72,9 @@
 - [ ] Delta-compressed component replication with schema versioning.
 
 ### 1.5 Congestion + QoS Intelligence
-- [x] **Feature Operational**: Add runtime chaos profile CLI controls for simulation transport (drop/dup/reorder/seed).
+- [x] **Feature Operational**: Add runtime chaos profile CLI controls for simulation transport (drop/dup/reorder/seed) *(Module: `Source/diablo.cpp`, `Source/dvlnet/net_chaos.hpp` | Expected Test: `test/net_chaos_test.cpp::NetChaosTest.{DropProfileDropsAllPackets,DuplicateProfileCanDuplicatePackets}`)*.
   - Acceptance Criterion *(Path: `dvlnet`, Stage: 0)*: `Source/diablo.cpp and Source/dvlnet/net_chaos.hpp` maps CLI values to runtime profile and rejects invalid ranges; validated by `test/net_chaos_test.cpp` (`NetChaosTest.{DropProfileDropsAllPackets,DuplicateProfileCanDuplicatePackets}`).
-- [x] **Feature Operational**: Packet budget allocator per frame using moving RTT/loss/jitter windows.
+- [x] **Feature Operational**: Packet budget allocator per frame using moving RTT/loss/jitter windows *(Module: `Source/dvlnet/net_qos.hpp` | Expected Test: `test/net_qos_test.cpp::NetQosTest.DropsBudgetUnderLossAndLatency`)*.
   - Acceptance Criterion *(Path: `dvlnet`, Stage: 0)*: `Source/dvlnet/net_qos.hpp` enforces min/max packet budget envelope and converges within 60 frames after loss spike; validated by `test/net_qos_test.cpp` (`NetQosTest.DropsBudgetUnderLossAndLatency`).
 - [ ] Dynamic reliability policy (auto-upgrade event channels when loss spikes).
 - [ ] FEC pilot mode for high-loss links.
@@ -86,14 +95,14 @@
 ## 2) Graphics Pipeline Rework (AURORA-GFX)
 
 ### 2.1 Render Graph Architecture (Additive)
-- [x] **Feature Operational**: Add feature-flagged render-graph execution path in frame loop with legacy fallback.
+- [x] **Feature Operational**: Add feature-flagged render-graph execution path in frame loop with legacy fallback *(Module: `Source/engine/render/render_graph.hpp`, `Source/diablo.cpp` | Expected Test: `test/render_graph_test.cpp::RenderGraphTest.{ExecutesDefaultThreePassOrder,FailsValidationWhenDependencyNodeMissing}`)*.
   - Acceptance Criterion *(Path: non-net (`engine/render`), Stage: N/A for net migration)*: `Source/engine/render/render_graph.hpp and Source/diablo.cpp` toggles between render-graph and legacy path using `Gfx.RenderGraph` and auto-falls back on node compile failure; validated by `test/render_graph_test.cpp` (`RenderGraphTest.{ExecutesDefaultThreePassOrder,FailsValidationWhenDependencyNodeMissing}`).
 - [ ] Replace ad-hoc pass ordering with declarative render-graph DAG.
 - [ ] Explicit resource lifetime + transient texture aliasing.
 - [ ] Automatic barrier/sync generation per backend.
 
 ### 2.2 Multi-Backend Modernization
-- [x] **Scaffold Completed**: Define backend-agnostic RHI interface (`IRenderBackend`).
+- [x] **Scaffold Completed**: Define backend-agnostic RHI interface (`IRenderBackend`) *(Module: `Source/engine/render/render_backend.hpp` | Expected Test: `test/render_backend_contract_test.cpp::RenderBackendContractTest.ExposesBackendAgnosticContract`)*.
   - Acceptance Criterion *(Path: non-net (`engine/render`), Stage: N/A for net migration)*: `Source/engine/render/render_backend.hpp` exposes backend contract (device init, frame begin/end, resource create/destroy) with no backend-specific types in interface; validated by `test/render_backend_contract_test.cpp` (`RenderBackendContractTest.ExposesBackendAgnosticContract`).
 - [ ] Keep current backend as compatibility path.
 - [ ] Add staged support for modern API path (e.g., Vulkan/Metal/DX12-like model).
@@ -146,7 +155,7 @@
 
 ## 5) Milestone Plan
 
-### Milestone Status Mapping Table
+### Milestone Status Mapping Table (Milestone → code/test/flag traceability)
 
 | Milestone Item | Current Classification | Code Location | Net Migration Stage | Expected Test File | Feature Flag |
 |---|---|---|---|---|---|
@@ -164,10 +173,11 @@
 - Deterministic tick split is executable behind flag and validated by repeatable checksum test.
 - Render-graph skeleton can execute world/UI/post path with parity baseline image checks.
 - Compatibility/Fallback: legacy net + legacy render remain default; new paths require explicit enable via feature flags.
-  - Path/Stage annotation:
-    - `INetTransport`: `dvlnet` target, Stage 0 required (`engine/net` scaffolding optional at Stage 1).
-    - Deterministic tick split (net-facing runtime seam): `dvlnet` target, Stage 0 required.
-    - `IRenderBackend` + render graph skeleton: non-net (`engine/render`), net migration stage N/A.
+- Required evidence (module + expected tests):
+  - `Source/dvlnet/net_transport.hpp` → `test/net_transport_factory_test.cpp`.
+  - `Source/engine/render/render_backend.hpp` → `test/render_backend_contract_test.cpp`.
+  - `Source/nthread.cpp` → `test/sim_tick_hash_test.cpp`.
+  - `Source/engine/render/render_graph.hpp` → `test/render_graph_test.cpp`.
 
 ### Milestone B (Prototype)
 - [ ] Rollback MVP + replication graph MVP + basic render graph passes.
@@ -177,10 +187,10 @@
 - Replication graph MVP reduces payload vs full-world baseline by agreed threshold in synthetic scene.
 - Basic render graph pass chain produces expected frame output on reference map.
 - Compatibility/Fallback: if rollback divergence exceeds threshold or pass build fails, runtime auto-reverts to non-rollback or legacy pass chain.
-  - Path/Stage annotation:
-    - Rollback MVP: `dvlnet` target, Stage 0 required (`engine/net/rollback` allowed only as Stage 1 dual-path).
-    - Replication graph MVP: `dvlnet` target, Stage 0 required (`engine/net/replication` allowed only as Stage 1 dual-path).
-    - Basic render graph pass chain: non-net (`engine/render`), net migration stage N/A.
+- Required evidence (module + expected tests):
+  - `Source/dvlnet/rollback_state.*` → `test/net/test_rollback_mvp.cpp`.
+  - `Source/dvlnet/replication_graph.*` (or Stage 1 mirror) → `test/net/test_replication_graph_mvp.cpp`.
+  - `Source/engine/render/render_graph/passes/*` → `test/render/test_render_graph_basic_passes.cpp`.
 
 ### Milestone C (Acceleration)
 - [ ] GPU-driven draws, async compute, QUIC adapter, dynamic budgets.
@@ -191,10 +201,11 @@
 - QUIC adapter passes reliability/interruption recovery tests.
 - Dynamic packet budgets remain within latency SLA under chaos profiles.
 - Compatibility/Fallback: disable GPU-driven/async/QUIC independently at runtime; hard fallback to stable backend if capability probe fails.
-  - Path/Stage annotation:
-    - QUIC adapter: `dvlnet` target, Stage 0 required (`engine/net/transport/quic` introduction only at Stage 1).
-    - Dynamic packet budgets: `dvlnet` target, Stage 0 required (`engine/net/qos` introduction only at Stage 1).
-    - GPU-driven + async compute: non-net (`engine/render`), net migration stage N/A.
+- Required evidence (module + expected tests):
+  - `Source/engine/render/gpu_driven/*` → `test/render/test_gpu_driven_draws.cpp`.
+  - `Source/engine/render/async_compute/*` → `test/render/test_async_compute_pipeline.cpp`.
+  - `Source/dvlnet/*` or `Source/engine/net/transport/quic/*` (per stage) → `test/net/test_quic_transport.cpp`.
+  - `Source/dvlnet/net_qos.hpp` (or Stage 2 equivalent) → `test/net_qos_test.cpp`.
 
 ### Milestone D (Hardening)
 - [ ] Telemetry, replay validation, perf bake-offs, fallback tuning.
@@ -204,10 +215,11 @@
 - Replay validation detects divergence and emits actionable diagnostics.
 - Perf bake-off suite runs in CI and enforces regression budget.
 - Compatibility/Fallback: fallback triggers are rate-limited, observable, and reversible without restart where feasible.
-  - Path/Stage annotation:
-    - Telemetry counters: `dvlnet` target, Stage 0 required (`engine/net/telemetry` introduction only at Stage 1).
-    - Replay validation: `dvlnet` target, Stage 0 required (`engine/net/replay` introduction only at Stage 1).
-    - Perf + fallback framework: non-net (`engine/perf`, `engine/fallback`), net migration stage N/A.
+- Required evidence (module + expected tests):
+  - `Source/dvlnet/net_telemetry.*` or `Source/engine/net/telemetry/*` → `test/net/test_telemetry_counters.cpp`.
+  - `Source/engine/net/replay/*` (or interim dvlnet replay module) → `test/net/test_replay_validation.cpp`.
+  - `Source/engine/perf/*` → `test/perf/test_bakeoff_baselines.cpp`.
+  - `Source/engine/fallback/*` → `test/core/test_auto_fallback.cpp`.
 
 ### Milestone E (Production)
 - [ ] Default-on for supported platforms, legacy retained as fallback.
@@ -217,26 +229,25 @@
 - Crash-free/session-stability and performance SLOs met for release window.
 - Rollout includes staged canary + automated rollback policy.
 - Compatibility/Fallback: legacy transport/render paths are still shippable, test-covered, and can be forced by CLI/config on every supported platform.
-  - Path/Stage annotation:
-    - Net default-on readiness: `engine/net` target, Stage 2 required.
-    - Legacy net fallback enforceability: `dvlnet` retained as compatibility path at Stage 2.
-    - Render default-on readiness/fallback: non-net (`engine/render`), net migration stage N/A.
+- Required evidence (module + expected tests):
+  - `Source/options.cpp`, `Source/options.h` → `test/config/test_default_on_matrix.cpp`.
+  - `Source/engine/platform/*` + final net migration toggles → `test/core/test_legacy_fallback_guard.cpp`.
 
 ---
 
 ## 6) Immediate Next Actions (Highest ROI)
-- [x] **Scaffold Completed**: Draft `INetTransport` and `IRenderBackend` interface headers.
+- [x] **Scaffold Completed**: Draft `INetTransport` and `IRenderBackend` interface headers *(Module: `Source/dvlnet/net_transport.hpp`, `Source/engine/render/render_backend.hpp` | Expected Test: `test/net_transport_factory_test.cpp`, `test/render_backend_contract_test.cpp`)*.
   - Acceptance Criterion *(Path: `dvlnet` for net scope, Stage: 0)*: `Source/dvlnet/net_transport.hpp` and `Source/engine/render/render_backend.hpp` compile cleanly with unit contract tests; validated by `test/net_transport_factory_test.cpp` and `test/render_backend_contract_test.cpp`.
-- [x] **Feature Operational**: Add feature-flag config plumbing and startup parsing.
+- [x] **Feature Operational**: Add feature-flag config plumbing and startup parsing *(Module: `Source/options.h`, `Source/options.cpp` | Expected Test: `test/gameplay_feature_flags_test.cpp::GameplayFeatureFlags.{DefaultsAreSafeAndStaged,IndependentToggleControl}`)*.
   - Acceptance Criterion *(Path: `dvlnet` for active net flags, Stage: 0)*: `Source/options.h and Source/options.cpp` and startup parsing apply flags at boot and persist per-session overrides; validated by `test/gameplay_feature_flags_test.cpp` (`GameplayFeatureFlags.{DefaultsAreSafeAndStaged,IndependentToggleControl}`).
-- [x] **Scaffold Completed**: Add deterministic tick boundary + hash instrumentation.
+- [x] **Scaffold Completed**: Add deterministic tick boundary + hash instrumentation *(Module: `Source/nthread.h`, `Source/nthread.cpp` | Expected Test: `test/sim_tick_hash_test.cpp::SimTickHashTest.RecordsTickCountAndDeterministicHash`)*.
   - Acceptance Criterion *(Path: `dvlnet`-adjacent runtime, Stage: 0)*: `Source/nthread.h and Source/nthread.cpp` expose tick/hash APIs and emit hash samples every configured N ticks; validated by `test/sim_tick_hash_test.cpp` (`SimTickHashTest.RecordsTickCountAndDeterministicHash`).
-- [x] **Feature Operational**: Implement minimal render graph with 3 passes (world, UI, post).
+- [x] **Feature Operational**: Implement minimal render graph with 3 passes (world, UI, post) *(Module: `Source/engine/render/render_graph.hpp` | Expected Test: `test/render_graph_test.cpp::RenderGraphTest.ExecutesDefaultThreePassOrder`)*.
   - Acceptance Criterion *(Path: non-net (`engine/render`), Stage: N/A for net migration)*: `Source/engine/render/render_graph.hpp` run in deterministic order and complete frame without legacy path; validated by `test/render_graph_test.cpp` (`RenderGraphTest.ExecutesDefaultThreePassOrder`).
 - [ ] Create benchmark map + scripted network chaos test.
-  - [x] **Feature Operational**: Scripted network chaos injector harness (drop/duplicate/reorder profile core).
+  - [x] **Feature Operational**: Scripted network chaos injector harness (drop/duplicate/reorder profile core) *(Module: `Source/dvlnet/net_chaos.hpp` | Expected Test: `test/net_sim_sync_test.cpp::NetSimSyncTest.{DeterministicLatencyAndJitterStillPreserveSyncOrder,DeterministicDropScenarioMatchesExpectedSyncDensity}`)*.
     - Acceptance Criterion *(Path: `dvlnet`, Stage: 0)*: `Source/dvlnet/net_chaos.hpp` can replay seed and reproduce packet mutation sequence exactly across runs; validated by `test/net_sim_sync_test.cpp` (`NetSimSyncTest.{DeterministicLatencyAndJitterStillPreserveSyncOrder,DeterministicDropScenarioMatchesExpectedSyncDensity}`).
-  - [x] **Scaffold Completed**: Chaos processing micro-benchmark harness.
+  - [x] **Scaffold Completed**: Chaos processing micro-benchmark harness *(Module: `test/net_chaos_benchmark.cpp` | Expected Test: `test/net_chaos_test.cpp::NetChaosTest.ReorderWindowCanReverseOrder`)*.
     - Acceptance Criterion *(Path: `dvlnet` benchmark scope, Stage: 0)*: `test/net_chaos_benchmark.cpp` outputs stable p50/p95 metrics format consumable by CI artifact parser; validated by `test/net_chaos_test.cpp` (`NetChaosTest.ReorderWindowCanReverseOrder`).
 
 ## Approval Gates Requested
