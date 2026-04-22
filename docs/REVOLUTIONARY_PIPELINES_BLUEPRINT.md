@@ -164,6 +164,10 @@
 - Deterministic tick split is executable behind flag and validated by repeatable checksum test.
 - Render-graph skeleton can execute world/UI/post path with parity baseline image checks.
 - Compatibility/Fallback: legacy net + legacy render remain default; new paths require explicit enable via feature flags.
+  - Path/Stage annotation:
+    - `INetTransport`: `dvlnet` target, Stage 0 required (`engine/net` scaffolding optional at Stage 1).
+    - Deterministic tick split (net-facing runtime seam): `dvlnet` target, Stage 0 required.
+    - `IRenderBackend` + render graph skeleton: non-net (`engine/render`), net migration stage N/A.
 
 ### Milestone B (Prototype)
 - [ ] Rollback MVP + replication graph MVP + basic render graph passes.
@@ -173,6 +177,10 @@
 - Replication graph MVP reduces payload vs full-world baseline by agreed threshold in synthetic scene.
 - Basic render graph pass chain produces expected frame output on reference map.
 - Compatibility/Fallback: if rollback divergence exceeds threshold or pass build fails, runtime auto-reverts to non-rollback or legacy pass chain.
+  - Path/Stage annotation:
+    - Rollback MVP: `dvlnet` target, Stage 0 required (`engine/net/rollback` allowed only as Stage 1 dual-path).
+    - Replication graph MVP: `dvlnet` target, Stage 0 required (`engine/net/replication` allowed only as Stage 1 dual-path).
+    - Basic render graph pass chain: non-net (`engine/render`), net migration stage N/A.
 
 ### Milestone C (Acceleration)
 - [ ] GPU-driven draws, async compute, QUIC adapter, dynamic budgets.
@@ -183,6 +191,10 @@
 - QUIC adapter passes reliability/interruption recovery tests.
 - Dynamic packet budgets remain within latency SLA under chaos profiles.
 - Compatibility/Fallback: disable GPU-driven/async/QUIC independently at runtime; hard fallback to stable backend if capability probe fails.
+  - Path/Stage annotation:
+    - QUIC adapter: `dvlnet` target, Stage 0 required (`engine/net/transport/quic` introduction only at Stage 1).
+    - Dynamic packet budgets: `dvlnet` target, Stage 0 required (`engine/net/qos` introduction only at Stage 1).
+    - GPU-driven + async compute: non-net (`engine/render`), net migration stage N/A.
 
 ### Milestone D (Hardening)
 - [ ] Telemetry, replay validation, perf bake-offs, fallback tuning.
@@ -192,6 +204,10 @@
 - Replay validation detects divergence and emits actionable diagnostics.
 - Perf bake-off suite runs in CI and enforces regression budget.
 - Compatibility/Fallback: fallback triggers are rate-limited, observable, and reversible without restart where feasible.
+  - Path/Stage annotation:
+    - Telemetry counters: `dvlnet` target, Stage 0 required (`engine/net/telemetry` introduction only at Stage 1).
+    - Replay validation: `dvlnet` target, Stage 0 required (`engine/net/replay` introduction only at Stage 1).
+    - Perf + fallback framework: non-net (`engine/perf`, `engine/fallback`), net migration stage N/A.
 
 ### Milestone E (Production)
 - [ ] Default-on for supported platforms, legacy retained as fallback.
@@ -201,6 +217,10 @@
 - Crash-free/session-stability and performance SLOs met for release window.
 - Rollout includes staged canary + automated rollback policy.
 - Compatibility/Fallback: legacy transport/render paths are still shippable, test-covered, and can be forced by CLI/config on every supported platform.
+  - Path/Stage annotation:
+    - Net default-on readiness: `engine/net` target, Stage 2 required.
+    - Legacy net fallback enforceability: `dvlnet` retained as compatibility path at Stage 2.
+    - Render default-on readiness/fallback: non-net (`engine/render`), net migration stage N/A.
 
 ---
 
