@@ -1,0 +1,45 @@
+name: phase1-final-gate
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  phase1-final-gate:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y cmake curl g++ git libgtest-dev libgmock-dev libbenchmark-dev libfmt-dev libsdl2-dev libsodium-dev libpng-dev libbz2-dev ninja-build wget
+
+      - name: Configure
+        run: cmake -S. -Bbuild -G Ninja -DDEVILUTIONX_SYSTEM_BENCHMARK=OFF
+
+      - name: Build required tests
+        run: >-
+          cmake --build build -j $(nproc) --target
+          raid_state_test
+          raid_progression_test
+          raid_protocol_test
+          raid_sync_test
+          encounter_schema_test
+          encounter_engine_phase_test
+          rollback_state_test
+          net_telemetry_trace_test
+          net_chaos_test
+          net_qos_test
+
+      - name: Run phase1-final-gate preset
+        run: |
+          cd build
+          ctest --output-on-failure --tests-regex '^(raid_state_test|raid_progression_test|raid_protocol_test|raid_sync_test|encounter_schema_test|encounter_engine_phase_test|rollback_state_test|net_telemetry_trace_test|net_chaos_test|net_qos_test)$'
