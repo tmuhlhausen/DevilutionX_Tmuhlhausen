@@ -2,6 +2,8 @@
 
 #include <algorithm>
 
+#include "dvlnet/net_telemetry.hpp"
+
 namespace devilution::dvlnet {
 namespace {
 
@@ -32,6 +34,7 @@ void RollbackState::Reset()
 		slot.meta = {};
 		slot.snapshot.clear();
 	}
+	pendingAuthoritativeState_.reset();
 }
 
 size_t RollbackState::SlotIndex(uint64_t tick) const
@@ -60,6 +63,7 @@ void RollbackState::StoreSnapshot(uint64_t tick, std::span<const std::byte> worl
 	Slot &slot = ring_[SlotIndex(tick)];
 	slot.meta.tick = tick;
 	slot.meta.stateHash = stateHash;
+	slot.meta.hasHash = true;
 	slot.meta.hasSnapshot = true;
 	slot.snapshot.assign(worldSnapshot.begin(), worldSnapshot.end());
 }
@@ -74,10 +78,28 @@ void RollbackState::QueuePredictedInput(uint64_t tick, std::span<const std::byte
 	slot.meta.input.assign(input.begin(), input.end());
 }
 
+void RollbackState::SubmitAuthoritativeState(uint64_t tick, uint32_t stateHash)
+{
+	pendingAuthoritativeState_ = RollbackTickMetadata {
+		.tick = tick,
+		.stateHash = stateHash,
+		.hasHash = true,
+	};
+}
+
+std::optional<RollbackTickMetadata> RollbackState::ConsumeAuthoritativeState()
+{
+	if (!pendingAuthoritativeState_.has_value())
+		return std::nullopt;
+	const RollbackTickMetadata state = *pendingAuthoritativeState_;
+	pendingAuthoritativeState_.reset();
+	return state;
+}
+
 std::optional<uint32_t> RollbackState::GetHash(uint64_t tick) const
 {
 	const Slot *slot = FindSlot(tick);
-	if (slot == nullptr)
+	if (slot == nullptr || !slot->meta.hasHash)
 		return std::nullopt;
 	return slot->meta.stateHash;
 }
@@ -143,6 +165,7 @@ bool RollbackState::HandleCorrection(uint64_t authoritativeTick, uint32_t author
 		return false;
 	if (!DetectDivergence(authoritativeTick, authoritativeHash))
 		return false;
+	GetNetTelemetryAggregator().RecordDivergence();
 	if (!restoreSnapshot(authoritativeSlot->snapshot))
 		return false;
 	const uint64_t replayTicks = currentTick >= authoritativeTick ? (currentTick - authoritativeTick) : 0;

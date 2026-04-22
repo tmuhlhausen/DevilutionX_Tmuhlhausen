@@ -13,6 +13,7 @@ struct RollbackTickMetadata {
 	uint64_t tick = 0;
 	uint32_t stateHash = 0;
 	std::vector<std::byte> input;
+	bool hasHash = false;
 	bool hasSnapshot = false;
 };
 
@@ -41,6 +42,8 @@ public:
 	void Reset();
 	void StoreSnapshot(uint64_t tick, std::span<const std::byte> worldSnapshot, uint32_t stateHash);
 	void QueuePredictedInput(uint64_t tick, std::span<const std::byte> input);
+	void SubmitAuthoritativeState(uint64_t tick, uint32_t stateHash);
+	[[nodiscard]] std::optional<RollbackTickMetadata> ConsumeAuthoritativeState();
 	[[nodiscard]] std::optional<uint32_t> GetHash(uint64_t tick) const;
 	[[nodiscard]] bool HasSnapshot(uint64_t tick) const;
 	[[nodiscard]] bool DetectDivergence(uint64_t tick, uint32_t authoritativeHash) const;
@@ -66,6 +69,7 @@ private:
 
 	size_t depth_;
 	std::vector<Slot> ring_;
+	std::optional<RollbackTickMetadata> pendingAuthoritativeState_;
 	RollbackReplayPolicyProfile profile_ = RollbackReplayPolicyProfile::Balanced;
 };
 

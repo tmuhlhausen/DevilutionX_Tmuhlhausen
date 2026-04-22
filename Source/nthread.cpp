@@ -159,7 +159,7 @@ void nthread_start(bool setTurnUpperBit)
 	last_tick = SDL_GetTicks();
 	SimTickCount = 0;
 	SimStateHash = 0;
-	GetNetTelemetryAggregator().SetTraceEnabled(*GetOptions().Network.netTraceEnabled);
+	GetNetTelemetryAggregator().SetTraceEnabled(*GetOptions().Network.netTraceEnabled, *GetOptions().Network.netTraceFormat);
 	sgbPacketCountdown = 1;
 	sgbSyncCountdown = 1;
 	sgbTicsOutOfSync = true;

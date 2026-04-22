@@ -37,31 +37,34 @@ Phase 1 establishes a deterministic raid core, rollback-safe networking behavior
 - Invalid transitions are rejected and logged with reason codes.
 - Transition replay from authoritative snapshots yields identical terminal state.
 - Regression tests cover happy-path, abort-path, and invalid-edge transitions.
+- Migration annotation: *(Path: non-net (`raid/*`), Stage: N/A for net migration).*
 
 #### B) Lockout enforcement (`raid_rules.*`)
 - Account/character lockout windows are consistently applied before raid entry.
 - Lockout bypass attempts (late join, reconnect, stale client cache) are denied deterministically.
 - Lockout expiration is time-source consistent between host and client simulation.
 - Rule-evaluation tests validate lockout and eligibility matrixes.
+- Migration annotation: *(Path: non-net (`raid/*`), Stage: N/A for net migration).*
 
 #### C) Reward deduplication (`raid_progression.*`)
 - Rewards are keyed by stable completion identity (`raid_id + encounter_id + completion_nonce` or equivalent canonical key).
 - Duplicate completion packets/events cannot mint duplicate rewards.
 - Reconnect/replay paths preserve exactly-once reward grant semantics.
 - Progression tests verify first-grant, duplicate-event, and rollback/replay scenarios.
+- Migration annotation: *(Path: non-net (`raid/*`), Stage: N/A for net migration).*
 
 ### Acceptance traceability table
 
 | Acceptance check ID | Source module | Test target(s) from `CMake/Tests.cmake` | Pass condition | Owner |
 |---|---|---|---|---|
-| P1-RAID-A | `Source/raid/raid_state.*` | `raid_state_test`, `raid_sync_test` | Transition graph only permits valid edges, rejects invalid edges with reason codes, and snapshot replay lands in identical terminal state. | Raid Systems Lead |
-| P1-RAID-B | `Source/raid/raid_rules.*` | `raid_sync_test`, `raid_protocol_test` | Lockout and eligibility checks are deterministic across host/client simulation, including late join/reconnect/stale cache denial cases. | Raid Systems Lead |
-| P1-RAID-C | `Source/raid/raid_progression.*` | `raid_progression_test`, `raid_protocol_test` | Rewards are granted exactly once per canonical completion key and remain deduplicated through reconnect/replay/rollback paths. | Raid Systems Lead |
-| P1-ENCOUNTER-A | `Source/raid/encounter_schema.*` | `encounter_schema_test` | Encounter and loot schema validation accepts valid multi-reward payloads and rejects malformed reward entries with deterministic outcomes. | Raid Systems Lead |
-| P1-ENCOUNTER-B | `Source/raid/encounter_engine_phase.*` | `encounter_engine_phase_test` | Scripted boss phase flow obeys explicit next-phase links and condition gates, including deterministic fail-state behavior. | Raid Systems Lead |
-| P1-NET-A | `Source/dvlnet/rollback_state.*` | `rollback_state_test`, `raid_sync_test` | Divergence detection remains deterministic and monotonic per frame with explicit soft/hard thresholds under synchronized state slices. | Networking Lead |
-| P1-NET-B | `Source/dvlnet/rollback_state.*` | `rollback_state_test` | Correction replay is idempotent, preserves immutable baselines, and never advances authoritative frame beyond validated bounds. | Networking Lead |
-| P1-NET-C | `Source/dvlnet/net_telemetry.*` | `net_telemetry_trace_test` | Telemetry lines round-trip without semantic drift, malformed fields produce structured errors, and versioned fields remain backward-compatible. | Networking Lead |
+| P1-RAID-A | `Source/raid/raid_state.*` | `raid_state_test`, `raid_sync_test` | Transition graph only permits valid edges, rejects invalid edges with reason codes, and snapshot replay lands in identical terminal state. *(Path: non-net (`raid/*`), Stage: N/A for net migration).* | Raid Systems Lead |
+| P1-RAID-B | `Source/raid/raid_rules.*` | `raid_sync_test`, `raid_protocol_test` | Lockout and eligibility checks are deterministic across host/client simulation, including late join/reconnect/stale cache denial cases. *(Path: non-net (`raid/*`), Stage: N/A for net migration).* | Raid Systems Lead |
+| P1-RAID-C | `Source/raid/raid_progression.*` | `raid_progression_test`, `raid_protocol_test` | Rewards are granted exactly once per canonical completion key and remain deduplicated through reconnect/replay/rollback paths. *(Path: non-net (`raid/*`), Stage: N/A for net migration).* | Raid Systems Lead |
+| P1-ENCOUNTER-A | `Source/raid/encounter_schema.*` | `encounter_schema_test` | Encounter and loot schema validation accepts valid multi-reward payloads and rejects malformed reward entries with deterministic outcomes. *(Path: non-net (`raid/*`), Stage: N/A for net migration).* | Raid Systems Lead |
+| P1-ENCOUNTER-B | `Source/raid/encounter_engine_phase.*` | `encounter_engine_phase_test` | Scripted boss phase flow obeys explicit next-phase links and condition gates, including deterministic fail-state behavior. *(Path: non-net (`raid/*`), Stage: N/A for net migration).* | Raid Systems Lead |
+| P1-NET-A | `Source/dvlnet/rollback_state.*` | `rollback_state_test`, `raid_sync_test` | Divergence detection remains deterministic and monotonic per frame with explicit soft/hard thresholds under synchronized state slices. *(Path: `dvlnet`, Stage: 0 required; future `engine/net` duplication allowed at Stage 1).* | Networking Lead |
+| P1-NET-B | `Source/dvlnet/rollback_state.*` | `rollback_state_test` | Correction replay is idempotent, preserves immutable baselines, and never advances authoritative frame beyond validated bounds. *(Path: `dvlnet`, Stage: 0 required; future `engine/net` duplication allowed at Stage 1).* | Networking Lead |
+| P1-NET-C | `Source/dvlnet/net_telemetry.*` | `net_telemetry_trace_test` | Telemetry lines round-trip without semantic drift, malformed fields produce structured errors, and versioned fields remain backward-compatible. *(Path: `dvlnet`, Stage: 0 required; future `engine/net` migration target Stage 1+).* | Networking Lead |
 
 ---
 
@@ -97,27 +100,29 @@ Phase 1 establishes a deterministic raid core, rollback-safe networking behavior
 ### Contributor entry map
 - Start: `README.md` (project orientation, build prerequisites).
 - Build details: `docs/building.md` (platform-specific setup and build invocations).
-- Key tests to run first:
+- Key tests to run first (core Phase-1 verification targets from `CMake/Tests.cmake`):
   - `test/raid_state_test.cpp`
-    - Why this test matters (Track 1 / Acceptance A): Validates authoritative raid lifecycle transitions, invalid-edge rejection, and replay-safe terminal state convergence.
-  - `test/raid_progression_test.cpp`
-    - Why this test matters (Track 1 / Acceptance C): Verifies reward grant identity/dedup logic across first-grant, duplicate, reconnect, and replay paths.
+    - Why this test matters (Track 1 / P1-RAID-A): Validates authoritative raid lifecycle transitions, invalid-edge rejection, and replay-safe terminal state convergence.
   - `test/raid_protocol_test.cpp`
-    - Why this test matters (Track 1 / Acceptance A-B): Confirms deterministic protocol handling for raid state/rules decisions and lockout-sensitive entry flows.
+    - Why this test matters (Track 1 / P1-RAID-B, P1-RAID-C): Confirms deterministic protocol behavior for lockout-sensitive entry/reconnect flows and progression events.
   - `test/raid_sync_test.cpp`
-    - Why this test matters (Track 1 / Acceptance A): Ensures host/client raid synchronization preserves deterministic transition outcomes.
+    - Why this test matters (Track 1 / P1-RAID-A, P1-RAID-B; Track 2 / P1-NET-A): Ensures host/client synchronization preserves deterministic transitions and rollback-state parity.
+  - `test/raid_progression_test.cpp`
+    - Why this test matters (Track 1 / P1-RAID-C): Verifies reward grant identity and dedup semantics across first-grant, duplicate, reconnect, and replay paths.
   - `test/encounter_schema_test.cpp`
-    - Why this test matters (Track 1 / Acceptance C): Guards encounter + loot schema validity so malformed reward payloads cannot bypass dedup-safe progression rules.
+    - Why this test matters (Track 1 / P1-ENCOUNTER-A): Guards encounter + loot schema validity, including malformed reward payload rejection.
   - `test/encounter_engine_phase_test.cpp`
-    - Why this test matters (Track 1 / Acceptance A): Validates scripted boss phase transitions, condition gating, and deterministic fail/rollback behavior.
+    - Why this test matters (Track 1 / P1-ENCOUNTER-B): Validates scripted boss phase links, condition gates, and deterministic fail-state/rollback behavior.
+  - `test/weekly_modifier_test.cpp`
+    - Why this test matters (Track 1 / P1-ENCOUNTER-B): Verifies deterministic encounter-affecting modifier application so phase logic stays stable across runs.
   - `test/rollback_state_test.cpp`
-    - Why this test matters (Track 2 / Invariants A-B): Covers divergence detection monotonicity and correction replay safety/idempotence boundaries.
+    - Why this test matters (Track 2 / P1-NET-A, P1-NET-B): Covers divergence detection monotonicity and correction replay safety/idempotence boundaries.
   - `test/net_telemetry_trace_test.cpp`
-    - Why this test matters (Track 2 / Invariant C): Confirms telemetry trace parse/format round-trip consistency and structured handling of malformed data.
+    - Why this test matters (Track 2 / P1-NET-C): Confirms telemetry trace parse/format round-trip consistency and structured malformed-field errors.
   - `test/net_chaos_test.cpp`
-    - Why this test matters (Track 2 / Invariant B): Stress-tests rollback correction behavior under reordering/loss-like chaos to protect replay safety guarantees.
+    - Why this test matters (Track 2 / P1-NET-B): Stress-tests rollback correction behavior under reordering/loss-like chaos to protect replay safety guarantees.
   - `test/net_qos_test.cpp`
-    - Why this test matters (Track 2 / Invariants A-C): Validates QoS classification/handling so divergence signals and telemetry remain actionable under network pressure.
+    - Why this test matters (Track 2 / P1-NET-A, P1-NET-C): Validates QoS behavior so divergence signals and telemetry remain actionable under network pressure.
 
 ### DX outcomes
 - New contributors can move from clone to first targeted test run with a single, documented path.
