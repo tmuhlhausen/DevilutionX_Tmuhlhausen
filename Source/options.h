@@ -27,6 +27,7 @@
 
 #include "appfat.h"
 #include "controls/controller_buttons.h"
+#include "dvlnet/net_telemetry.hpp"
 #include "dvlnet/net_transport_mode.hpp"
 #include "engine/size.hpp"
 #include "engine/sound_defs.hpp"
@@ -709,6 +710,8 @@ struct NetworkOptions : OptionCategoryBase {
 	OptionEntryInt<int> chaosSeed;
 	/** @brief Emit per-tick network telemetry trace file. */
 	OptionEntryBoolean netTraceEnabled;
+	/** @brief Output format for the telemetry trace writer. */
+	OptionEntryEnum<NetTraceFormat> netTraceFormat;
 	/** @brief Show rolling per-tick network telemetry overlay. */
 	OptionEntryBoolean netDebugOverlay;
 };

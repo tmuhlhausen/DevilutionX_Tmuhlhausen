@@ -2,6 +2,8 @@
 
 #include <algorithm>
 
+#include "dvlnet/net_telemetry.hpp"
+
 namespace devilution::dvlnet {
 namespace {
 
@@ -163,6 +165,7 @@ bool RollbackState::HandleCorrection(uint64_t authoritativeTick, uint32_t author
 		return false;
 	if (!DetectDivergence(authoritativeTick, authoritativeHash))
 		return false;
+	GetNetTelemetryAggregator().RecordDivergence();
 	if (!restoreSnapshot(authoritativeSlot->snapshot))
 		return false;
 	const uint64_t replayTicks = currentTick >= authoritativeTick ? (currentTick - authoritativeTick) : 0;
