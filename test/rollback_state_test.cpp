@@ -65,10 +65,25 @@ TEST(RollbackStateTest, DivergenceDetectionPath)
 {
 	RollbackState rollback(4);
 	rollback.StoreSnapshot(7, ToBytes({ 0xAA }), 0x1111);
+	rollback.QueuePredictedInput(8, ToBytes({ 0xBB }));
 
 	EXPECT_FALSE(rollback.DetectDivergence(7, 0x1111));
 	EXPECT_TRUE(rollback.DetectDivergence(7, 0x2222));
+	EXPECT_FALSE(rollback.DetectDivergence(8, 0x2222));
 	EXPECT_FALSE(rollback.DetectDivergence(999, 0x2222));
+}
+
+TEST(RollbackStateTest, AuthoritativeStateQueueIsConsumable)
+{
+	RollbackState rollback(4);
+	rollback.SubmitAuthoritativeState(12, 0xFEEDBEEF);
+	const std::optional<RollbackTickMetadata> first = rollback.ConsumeAuthoritativeState();
+	const std::optional<RollbackTickMetadata> second = rollback.ConsumeAuthoritativeState();
+	ASSERT_TRUE(first.has_value());
+	EXPECT_EQ(first->tick, 12U);
+	EXPECT_EQ(first->stateHash, 0xFEEDBEEFU);
+	EXPECT_TRUE(first->hasHash);
+	EXPECT_FALSE(second.has_value());
 }
 
 TEST(RollbackStateTest, ReplayProfilesAdjustAdaptiveThresholds)

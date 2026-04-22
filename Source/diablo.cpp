@@ -236,6 +236,41 @@ bool RestoreRollbackSnapshot(std::span<const std::byte> snapshot)
 	return true;
 }
 
+std::vector<std::byte> CapturePredictedLocalInput()
+{
+	std::vector<std::byte> input;
+	if (MyPlayer == nullptr)
+		return input;
+	AppendRollbackBytes(input, MyPlayer->position.future.x);
+	AppendRollbackBytes(input, MyPlayer->position.future.y);
+	AppendRollbackBytes(input, MyPlayer->_pdir);
+	return input;
+}
+
+void ApplyPredictedLocalInput(std::span<const std::byte> input)
+{
+	if (MyPlayer == nullptr)
+		return;
+	size_t offset = 0;
+	auto read = [&](auto &value) -> bool {
+		constexpr size_t Size = sizeof(value);
+		if (offset + Size > input.size())
+			return false;
+		memcpy(&value, input.data() + offset, Size);
+		offset += Size;
+		return true;
+	};
+
+	decltype(MyPlayer->position.future.x) predictedX {};
+	decltype(MyPlayer->position.future.y) predictedY {};
+	decltype(MyPlayer->_pdir) predictedDir {};
+	if (!read(predictedX) || !read(predictedY) || !read(predictedDir))
+		return;
+
+	MyPlayer->position.future = { predictedX, predictedY };
+	MyPlayer->_pdir = predictedDir;
+}
+
 void StartGame(interface_mode uMsg)
 {
 	CalcViewportGeometry();
@@ -1058,14 +1093,20 @@ void RunGameLoop(interface_mode uMsg)
 			nthread_RecordSimStateHash(simStateHash);
 			const std::vector<std::byte> snapshot = CaptureRollbackSnapshot();
 			dvlnet::GetRollbackState().StoreSnapshot(SimTickCount, snapshot, simStateHash);
+			const std::vector<std::byte> predictedInput = CapturePredictedLocalInput();
+			dvlnet::GetRollbackState().QueuePredictedInput(SimTickCount, predictedInput);
+			ApplyPredictedLocalInput(predictedInput);
 			const uint32_t rollbackStart = SDL_GetTicks();
-			dvlnet::GetRollbackState().HandleCorrection(SimTickCount, simStateHash, SimTickCount,
-			    [](std::span<const std::byte> snapshotBytes) {
-				    return RestoreRollbackSnapshot(snapshotBytes);
-			    },
-			    [](std::span<const std::byte> /*input*/) {
-				    // Replay integration for authoritative correction is intentionally conservative for now.
-			    });
+			const std::optional<dvlnet::RollbackTickMetadata> authoritativeState = dvlnet::GetRollbackState().ConsumeAuthoritativeState();
+			if (authoritativeState.has_value()) {
+				dvlnet::GetRollbackState().HandleCorrection(authoritativeState->tick, authoritativeState->stateHash, SimTickCount,
+				    [](std::span<const std::byte> snapshotBytes) {
+					    return RestoreRollbackSnapshot(snapshotBytes);
+				    },
+				    [](std::span<const std::byte> input) {
+					    ApplyPredictedLocalInput(input);
+				    });
+			}
 			GetNetTelemetryAggregator().RecordRollbackMs(static_cast<float>(SDL_GetTicks() - rollbackStart));
 		}
 		gbGameLoopStartup = false;
