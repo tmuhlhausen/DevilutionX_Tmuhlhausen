@@ -56,17 +56,21 @@ struct NetTransportRuntimeConfig {
 
 [[nodiscard]] inline std::unique_ptr<INetTransport> CreateNetTransport(const NetTransportRuntimeConfig &config)
 {
-	if (config.mode == NetTransport::Simulation) {
+	switch (config.mode) {
+	case NetTransport::Simulation: {
 		auto transport = std::make_unique<SimulatedLoopbackTransport>();
 		if (config.enableChaos) {
 			transport->SetChaosProfile(config.chaosSeed, config.chaosProfile);
 		}
 		return transport;
 	}
-	if (config.mode == NetTransport::Quic) {
+	case NetTransport::Udp:
+		return std::make_unique<UdpTransport>();
+	case NetTransport::Quic:
 		return std::make_unique<UnsupportedTransport>("quic", "QUIC transport is experimental and not available yet. Select UDP transport for multiplayer.");
+	default:
+		return std::make_unique<UnsupportedTransport>("unknown", "Unsupported network transport mode.");
 	}
-	return std::make_unique<UdpTransport>();
 }
 
 [[nodiscard]] inline std::unique_ptr<INetTransport> CreateNetTransport(NetTransport mode)
