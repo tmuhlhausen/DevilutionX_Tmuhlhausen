@@ -44,4 +44,26 @@ TEST(RenderBackendContractTest, ExposesBackendAgnosticContract)
 	EXPECT_FLOAT_EQ(stats.gpuFrameMs, 3.0F);
 }
 
+TEST(RenderBackendContractTest, StoresRenderGraphPassStats)
+{
+	const RenderGraphPassStats expected = {
+		RenderFrameStats { 11, 12, 1.1F },
+		RenderFrameStats { 21, 22, 2.2F },
+		RenderFrameStats { 31, 32, 3.3F },
+	};
+
+	SetLastRenderGraphPassStats(expected);
+
+	const RenderGraphPassStats &captured = GetLastRenderGraphPassStats();
+	EXPECT_EQ(captured[0].drawCalls, expected[0].drawCalls);
+	EXPECT_EQ(captured[0].triangles, expected[0].triangles);
+	EXPECT_FLOAT_EQ(captured[0].gpuFrameMs, expected[0].gpuFrameMs);
+	EXPECT_EQ(captured[1].drawCalls, expected[1].drawCalls);
+	EXPECT_EQ(captured[1].triangles, expected[1].triangles);
+	EXPECT_FLOAT_EQ(captured[1].gpuFrameMs, expected[1].gpuFrameMs);
+	EXPECT_EQ(captured[2].drawCalls, expected[2].drawCalls);
+	EXPECT_EQ(captured[2].triangles, expected[2].triangles);
+	EXPECT_FLOAT_EQ(captured[2].gpuFrameMs, expected[2].gpuFrameMs);
+}
+
 } // namespace devilution
