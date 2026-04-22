@@ -48,6 +48,35 @@ TEST(RenderGraphTest, FailsValidationWhenDependencyNodeMissing)
 	EXPECT_FALSE(brokenGraph.Execute());
 }
 
+TEST(RenderGraphTest, MissingMigrationNodePreventsPassExecution)
+{
+	std::vector<RenderPassId> executed;
+
+	RenderGraph migratingGraph;
+	migratingGraph.AddPass({ RenderPassId::World, "world", {}, [&] { executed.push_back(RenderPassId::World); } });
+	migratingGraph.AddPass({ RenderPassId::Post, "post", { RenderPassId::Ui }, [&] { executed.push_back(RenderPassId::Post); } });
+
+	EXPECT_FALSE(migratingGraph.Validate());
+	EXPECT_FALSE(migratingGraph.Execute());
+	EXPECT_TRUE(executed.empty());
+}
+
+TEST(RenderGraphTest, MigrationValidationRequiresDeclaredDependencies)
+{
+	RenderGraph migratingGraph;
+	migratingGraph.AddPass({ RenderPassId::World, "world", {}, [] {} });
+	migratingGraph.AddPass({ RenderPassId::Ui, "ui", { RenderPassId::World }, [] {} });
+	migratingGraph.AddPass({ RenderPassId::Post, "post", { RenderPassId::Ui, RenderPassId::World }, [] {} });
+
+	EXPECT_TRUE(migratingGraph.Validate());
+
+	RenderGraph missingWorldDependencyGraph;
+	missingWorldDependencyGraph.AddPass({ RenderPassId::Ui, "ui", { RenderPassId::World }, [] {} });
+	missingWorldDependencyGraph.AddPass({ RenderPassId::Post, "post", { RenderPassId::Ui, RenderPassId::World }, [] {} });
+
+	EXPECT_FALSE(missingWorldDependencyGraph.Validate());
+}
+
 TEST(RenderGraphTest, FailsValidationWhenPassIdDuplicated)
 {
 	RenderGraph graph;

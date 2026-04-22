@@ -992,7 +992,7 @@ void RunGameLoop(interface_mode uMsg)
 			return;
 		}
 
-		std::array<RenderFrameStats, 3> passFrameStats {};
+		RenderGraphPassStats passFrameStats {};
 		const auto capturePassStats = [&](RenderPassId passId) {
 			IRenderBackend *backend = GetActiveRenderBackend();
 			if (backend == nullptr)
@@ -1016,7 +1016,11 @@ void RunGameLoop(interface_mode uMsg)
 		if (!graph.Validate() || !graph.Execute()) {
 			// Safety fallback to legacy path.
 			DrawAndBlit();
+			SetLastRenderGraphPassStats({});
+			return;
 		}
+
+		SetLastRenderGraphPassStats(passFrameStats);
 	};
 
 	while (gbRunGame) {
