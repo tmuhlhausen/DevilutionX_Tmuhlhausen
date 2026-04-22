@@ -44,12 +44,16 @@ TEST(NetTransportFactoryTest, UdpTransportBindsLoopbackAndRoundTripsPackets)
 	ASSERT_TRUE(transport->Open("127.0.0.1", 0).has_value());
 	EXPECT_TRUE(transport->IsOpen());
 
+	std::array<uint8_t, 8> readBuffer {};
+	auto emptyPoll = transport->PollReceive(readBuffer);
+	ASSERT_TRUE(emptyPoll.has_value());
+	EXPECT_EQ(*emptyPoll, 0u);
+
 	constexpr std::array<uint8_t, 5> Packet { 8, 6, 7, 5, 3 };
 	auto sent = transport->Send(NetPacket { Packet });
 	ASSERT_TRUE(sent.has_value());
 	EXPECT_EQ(*sent, Packet.size());
 
-	std::array<uint8_t, 8> readBuffer {};
 	std::size_t received = 0;
 	for (int i = 0; i < 25; ++i) {
 		auto bytes = transport->PollReceive(readBuffer);
@@ -68,6 +72,8 @@ TEST(NetTransportFactoryTest, UdpTransportBindsLoopbackAndRoundTripsPackets)
 
 	transport->Close();
 	EXPECT_FALSE(transport->IsOpen());
+	EXPECT_FALSE(transport->Send(NetPacket { Packet }).has_value());
+	EXPECT_FALSE(transport->PollReceive(readBuffer).has_value());
 }
 
 TEST(NetTransportFactoryTest, QuicTransportStaysExperimentalWithCapabilityError)
