@@ -63,6 +63,7 @@ GuildHallState GetGuildHallState();
 GuildMemberState GetGuildMemberState(uint8_t playerId);
 bool IsGuildRateLimited(uint8_t playerId, uint8_t actionKey, uint32_t minIntervalMs);
 
+bool HasGuildInvite(uint8_t playerId);
 bool CreateGuild(uint8_t creatorPlayerId, std::string_view guildName);
 bool InviteToGuild(uint8_t inviterPlayerId, uint8_t targetPlayerId);
 bool JoinGuild(uint8_t playerId);
