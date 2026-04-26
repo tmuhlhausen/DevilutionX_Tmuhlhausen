@@ -21,11 +21,18 @@ std::array<GuildMemberState, MAX_PLRS> MemberStates {};
 std::array<std::array<uint32_t, 8>, MAX_PLRS> ActionTimestamps {};
 GuildId NextGuildId { 1 };
 
+bool IsAcceptedGuildMember(const GuildMemberState &state)
+{
+	return state.guildId.IsValid() && !state.invited && state.role != MemberRole::None;
+}
+
 void ClearGuild()
 {
 	ActiveGuild = {};
-	for (GuildMemberState &state : MemberStates)
-		state = {};
+	for (size_t i = 0; i < MemberStates.size(); i++) {
+		MemberStates[i] = {};
+		Players[i].guildMemberState = {};
+	}
 }
 
 void RecountGuildState()
@@ -38,7 +45,7 @@ void RecountGuildState()
 	uint8_t members = 0;
 	uint8_t online = 0;
 	for (size_t i = 0; i < MemberStates.size(); i++) {
-		if (MemberStates[i].guildId != ActiveGuild.guildId)
+		if (MemberStates[i].guildId != ActiveGuild.guildId || !IsAcceptedGuildMember(MemberStates[i]))
 			continue;
 		members++;
 		if (Players[i].plractive)
@@ -53,7 +60,7 @@ void RecountGuildState()
 
 bool IsGuildMember(uint8_t playerId)
 {
-	return playerId < MAX_PLRS && MemberStates[playerId].guildId.IsValid();
+	return playerId < MAX_PLRS && IsAcceptedGuildMember(MemberStates[playerId]);
 }
 
 bool TryTransferOwnership(uint8_t previousLeader)
@@ -68,9 +75,11 @@ bool TryTransferOwnership(uint8_t previousLeader)
 	for (size_t i = 0; i < MemberStates.size(); i++) {
 		if (i == previousLeader)
 			continue;
-		if (MemberStates[i].guildId == guildId && MemberStates[i].role == MemberRole::Officer) {
+		if (MemberStates[i].guildId == guildId && MemberStates[i].role == MemberRole::Officer && IsAcceptedGuildMember(MemberStates[i])) {
 			MemberStates[i].role = MemberRole::Leader;
 			MemberStates[i].permissions = PermissionsForRole(MemberStates[i].role);
+			Players[i].guildMemberState.role = MemberStates[i].role;
+			Players[i].guildMemberState.permissions = MemberStates[i].permissions;
 			return true;
 		}
 	}
@@ -78,9 +87,11 @@ bool TryTransferOwnership(uint8_t previousLeader)
 	for (size_t i = 0; i < MemberStates.size(); i++) {
 		if (i == previousLeader)
 			continue;
-		if (MemberStates[i].guildId == guildId) {
+		if (MemberStates[i].guildId == guildId && IsAcceptedGuildMember(MemberStates[i])) {
 			MemberStates[i].role = MemberRole::Leader;
 			MemberStates[i].permissions = PermissionsForRole(MemberStates[i].role);
+			Players[i].guildMemberState.role = MemberStates[i].role;
+			Players[i].guildMemberState.permissions = MemberStates[i].permissions;
 			return true;
 		}
 	}
@@ -158,6 +169,14 @@ GuildMemberState GetGuildMemberState(uint8_t playerId)
 	return MemberStates[playerId];
 }
 
+bool HasGuildInvite(uint8_t playerId)
+{
+	return playerId < MAX_PLRS
+	    && MemberStates[playerId].guildId.IsValid()
+	    && MemberStates[playerId].role == MemberRole::None
+	    && MemberStates[playerId].invited;
+}
+
 bool IsGuildRateLimited(uint8_t playerId, uint8_t actionKey, uint32_t minIntervalMs)
 {
 	if (playerId >= MAX_PLRS || actionKey >= ActionTimestamps[playerId].size())
@@ -192,7 +211,7 @@ bool InviteToGuild(uint8_t inviterPlayerId, uint8_t targetPlayerId)
 {
 	if (inviterPlayerId >= MAX_PLRS || targetPlayerId >= MAX_PLRS || inviterPlayerId == targetPlayerId)
 		return false;
-	if (!IsGuildMember(inviterPlayerId) || IsGuildMember(targetPlayerId))
+	if (!IsGuildMember(inviterPlayerId) || IsGuildMember(targetPlayerId) || HasGuildInvite(targetPlayerId))
 		return false;
 
 	const GuildMemberState inviter = MemberStates[inviterPlayerId];
@@ -204,7 +223,7 @@ bool InviteToGuild(uint8_t inviterPlayerId, uint8_t targetPlayerId)
 
 bool JoinGuild(uint8_t playerId)
 {
-	if (playerId >= MAX_PLRS || IsGuildMember(playerId) || !MemberStates[playerId].invited)
+	if (playerId >= MAX_PLRS || IsGuildMember(playerId) || !HasGuildInvite(playerId))
 		return false;
 	SaveGuildMemberState(playerId, MemberStates[playerId].guildId, MemberRole::Member, PermissionsForRole(MemberRole::Member), false);
 	RecountGuildState();
@@ -240,6 +259,8 @@ bool PromoteGuildMember(uint8_t promoterPlayerId, uint8_t targetPlayerId)
 
 	target.role = MemberRole::Officer;
 	target.permissions = PermissionsForRole(target.role);
+	Players[targetPlayerId].guildMemberState.role = target.role;
+	Players[targetPlayerId].guildMemberState.permissions = target.permissions;
 	return true;
 }
 
