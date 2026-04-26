@@ -22,9 +22,9 @@ std::array<GuildMemberState, MAX_PLRS> MemberStates {};
 std::array<std::array<uint32_t, 8>, MAX_PLRS> ActionTimestamps {};
 GuildId NextGuildId { 1 };
 
-[[nodiscard]] bool IsAcceptedGuildMemberState(const GuildMemberState &state)
+bool IsAcceptedGuildMember(const GuildMemberState &state)
 {
-	return state.guildId.IsValid() && state.role != MemberRole::None && !state.invited;
+	return state.guildId.IsValid() && !state.invited && state.role != MemberRole::None;
 }
 
 void ClearGuild()
@@ -45,7 +45,7 @@ void RecountGuildState()
 	uint8_t members = 0;
 	uint8_t online = 0;
 	for (size_t i = 0; i < MemberStates.size(); i++) {
-		if (MemberStates[i].guildId != ActiveGuild.guildId || !IsAcceptedGuildMemberState(MemberStates[i]))
+		if (MemberStates[i].guildId != ActiveGuild.guildId || !IsAcceptedGuildMember(MemberStates[i]))
 			continue;
 		members++;
 		if (Players[i].plractive)
@@ -60,7 +60,7 @@ void RecountGuildState()
 
 bool IsGuildMember(uint8_t playerId)
 {
-	return playerId < MAX_PLRS && IsAcceptedGuildMemberState(MemberStates[playerId]);
+	return playerId < MAX_PLRS && IsAcceptedGuildMember(MemberStates[playerId]);
 }
 
 bool TryTransferOwnership(uint8_t previousLeader)
@@ -75,7 +75,7 @@ bool TryTransferOwnership(uint8_t previousLeader)
 	for (size_t i = 0; i < MemberStates.size(); i++) {
 		if (i == previousLeader)
 			continue;
-		if (MemberStates[i].guildId == guildId && IsAcceptedGuildMemberState(MemberStates[i]) && MemberStates[i].role == MemberRole::Officer) {
+		if (MemberStates[i].guildId == guildId && IsAcceptedGuildMember(MemberStates[i]) && MemberStates[i].role == MemberRole::Officer) {
 			MemberStates[i].role = MemberRole::Leader;
 			MemberStates[i].permissions = PermissionsForRole(MemberStates[i].role);
 			return true;
@@ -85,7 +85,7 @@ bool TryTransferOwnership(uint8_t previousLeader)
 	for (size_t i = 0; i < MemberStates.size(); i++) {
 		if (i == previousLeader)
 			continue;
-		if (MemberStates[i].guildId == guildId && IsAcceptedGuildMemberState(MemberStates[i])) {
+		if (MemberStates[i].guildId == guildId && IsAcceptedGuildMember(MemberStates[i])) {
 			MemberStates[i].role = MemberRole::Leader;
 			MemberStates[i].permissions = PermissionsForRole(MemberStates[i].role);
 			return true;
@@ -164,6 +164,14 @@ GuildMemberState GetGuildMemberState(uint8_t playerId)
 	if (playerId >= MAX_PLRS)
 		return {};
 	return MemberStates[playerId];
+}
+
+bool HasGuildInvite(uint8_t playerId)
+{
+	if (playerId >= MAX_PLRS)
+		return false;
+	const GuildMemberState &state = MemberStates[playerId];
+	return state.guildId.IsValid() && state.invited && state.role == MemberRole::None;
 }
 
 bool IsGuildRateLimited(uint8_t playerId, uint8_t actionKey, uint32_t minIntervalMs)
