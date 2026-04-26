@@ -15,7 +15,9 @@ set(libdevilutionx_SRCS
   gamemenu.cpp
   gmenu.cpp
   guild/guild.cpp
+  guild/guild_mod_api.cpp
   guild/guild_progression.cpp
+  raid/raid_mod_api.cpp
   raid/raid_rules.cpp
   raid/raid_state.cpp
   raid/raid_routing.cpp

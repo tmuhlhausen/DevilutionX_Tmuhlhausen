@@ -23,7 +23,6 @@ set(tests
   drlg_l3_test
   drlg_l4_test
   effects_test
-  guild_test
   inv_test
   items_test
   math_test
@@ -50,6 +49,7 @@ set(tests
   game_menu_test
   gameplay_feature_flags_test
   guild_progression_test
+  guild_test
   raid_state_test
   raid_protocol_test
   raid_progression_test
