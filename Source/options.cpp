@@ -966,6 +966,13 @@ NetworkOptions::NetworkOptions()
     , chaosDuplicatePct("Chaos Duplicate Percent", OptionEntryFlags::Invisible | OptionEntryFlags::CantChangeInMultiPlayer, N_("Chaos Duplicate Percent"), N_("Packet duplication percent for simulation transport chaos injector."), 0, { 0, 1, 2, 5, 10, 15, 20, 30, 50, 75, 100 })
     , chaosReorderWindow("Chaos Reorder Window", OptionEntryFlags::Invisible | OptionEntryFlags::CantChangeInMultiPlayer, N_("Chaos Reorder Window"), N_("Packet reorder window for simulation transport chaos injector."), 1, { 1, 2, 3, 4, 6, 8, 12, 16 })
     , chaosSeed("Chaos Seed", OptionEntryFlags::Invisible | OptionEntryFlags::CantChangeInMultiPlayer, N_("Chaos Seed"), N_("Deterministic random seed for simulation transport chaos injector."), 1337, { 7, 42, 1337, 9001, 65535 })
+    , netTraceEnabled("Net Tick Trace", OptionEntryFlags::Invisible | OptionEntryFlags::CantChangeInMultiPlayer, N_("Net Tick Trace"), N_("Write per-tick telemetry trace for offline analysis."), false)
+    , netTraceFormat("Net Tick Trace Format", OptionEntryFlags::Invisible | OptionEntryFlags::CantChangeInMultiPlayer, N_("Net Tick Trace Format"), N_("Select the telemetry trace record format."), NetTraceFormat::Jsonl,
+          {
+              { NetTraceFormat::Jsonl, N_("JSONL") },
+              { NetTraceFormat::Tsv, N_("TSV") },
+          })
+    , netDebugOverlay("Net Debug Overlay", OptionEntryFlags::Invisible | OptionEntryFlags::CantChangeInMultiPlayer, N_("Net Debug Overlay"), N_("Show rolling network telemetry counters."), false)
 {
 }
 std::vector<OptionEntryBase *> NetworkOptions::GetEntries()
@@ -979,6 +986,9 @@ std::vector<OptionEntryBase *> NetworkOptions::GetEntries()
 		&chaosDuplicatePct,
 		&chaosReorderWindow,
 		&chaosSeed,
+		&netTraceEnabled,
+		&netTraceFormat,
+		&netDebugOverlay,
 	};
 }
 

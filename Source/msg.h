@@ -639,8 +639,11 @@ struct TCmdRaidState {
 	uint8_t difficulty;
 	uint8_t phase;
 	uint8_t lockoutState;
-	uint8_t reserved;
+	uint8_t attemptsLeft;
 	uint32_t instanceSeed;
+	uint32_t joinedMask;
+	uint32_t readyMask;
+	uint8_t roleSlots[4];
 	uint8_t bossStates[MaxRaidBosses];
 	uint64_t objectiveBits;
 	uint32_t timersMs[MaxRaidTimers];

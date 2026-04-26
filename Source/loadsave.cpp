@@ -36,6 +36,7 @@
 #include "pfile.h"
 #include "plrmsg.h"
 #include "qol/stash.h"
+#include "raid/raid_progression.hpp"
 #include "stores.h"
 #include "tables/playerdat.hpp"
 #include "utils/algorithm/container.hpp"
@@ -55,7 +56,8 @@ namespace {
 constexpr size_t MaxMissilesForSaveGame = 125;
 constexpr size_t PlayerWalkPathSizeForSaveGame = 25;
 constexpr uint8_t PlayerSaveFormatRevision = 2;
-constexpr uint8_t GuildProgressionPayloadVersion = 1;
+constexpr uint8_t GuildProgressionPayloadVersion = 2;
+constexpr uint8_t RaidProgressionPayloadVersion = 1;
 
 uint8_t giNumberQuests;
 uint8_t giNumberOfSmithPremiumItems;
@@ -264,18 +266,41 @@ void LoadGuildProgressionPayload(LoadHelper &file)
 		return;
 
 	const uint8_t payloadVersion = file.NextLE<uint8_t>();
-	if (payloadVersion != GuildProgressionPayloadVersion)
+	if (payloadVersion != 1 && payloadVersion != GuildProgressionPayloadVersion)
 		return;
 
 	GuildProgressionPersistedState state {};
 	state.guildId.value = file.NextLE<uint32_t>();
 	for (uint32_t &counter : state.counters)
 		counter = file.NextLE<uint32_t>();
+	if (payloadVersion >= 2) {
+		for (uint32_t &counter : state.seasonCounterBaseline)
+			counter = file.NextLE<uint32_t>();
+	}
 	for (uint64_t &milestoneBits : state.completedMilestones)
 		milestoneBits = file.NextLE<uint64_t>();
 	state.usedDedupKeys = file.NextLE<uint16_t>();
 	for (uint64_t &dedupKey : state.dedupKeys)
 		dedupKey = file.NextLE<uint64_t>();
+	if (payloadVersion >= 2) {
+		for (uint64_t &claimDedupKey : state.claimDedupKeys)
+			claimDedupKey = file.NextLE<uint64_t>();
+		for (GuildRankingSnapshot &snapshot : state.rankingSnapshots) {
+			snapshot.seasonId = file.NextLE<uint32_t>();
+			snapshot.snapshotId = file.NextLE<uint32_t>();
+			snapshot.accumulatedActivity = file.NextLE<uint32_t>();
+			snapshot.tier = file.NextLE<uint16_t>();
+			snapshot.prestigePoints = file.NextLE<uint32_t>();
+		}
+		state.seasonId = file.NextLE<uint32_t>();
+		state.seasonResetIntervalWeeks = file.NextLE<uint32_t>();
+		state.nextSeasonResetWeek = file.NextLE<uint32_t>();
+		state.seasonTransitions = file.NextLE<uint32_t>();
+		state.prestigePoints = file.NextLE<uint32_t>();
+		state.prestigeLevel = file.NextLE<uint16_t>();
+		state.usedClaimDedupKeys = file.NextLE<uint16_t>();
+		state.usedRankingSnapshots = file.NextLE<uint8_t>();
+	}
 	ApplyGuildProgressionPersistedState(state);
 }
 
@@ -286,11 +311,112 @@ void SaveGuildProgressionPayload(SaveHelper &file)
 	file.WriteLE<uint32_t>(state.guildId.value);
 	for (uint32_t counter : state.counters)
 		file.WriteLE<uint32_t>(counter);
+	for (uint32_t counter : state.seasonCounterBaseline)
+		file.WriteLE<uint32_t>(counter);
 	for (uint64_t milestoneBits : state.completedMilestones)
 		file.WriteLE<uint64_t>(milestoneBits);
 	file.WriteLE<uint16_t>(state.usedDedupKeys);
 	for (uint64_t dedupKey : state.dedupKeys)
 		file.WriteLE<uint64_t>(dedupKey);
+	for (uint64_t dedupKey : state.claimDedupKeys)
+		file.WriteLE<uint64_t>(dedupKey);
+	for (const GuildRankingSnapshot &snapshot : state.rankingSnapshots) {
+		file.WriteLE<uint32_t>(snapshot.seasonId);
+		file.WriteLE<uint32_t>(snapshot.snapshotId);
+		file.WriteLE<uint32_t>(snapshot.accumulatedActivity);
+		file.WriteLE<uint16_t>(snapshot.tier);
+		file.WriteLE<uint32_t>(snapshot.prestigePoints);
+	}
+	file.WriteLE<uint32_t>(state.seasonId);
+	file.WriteLE<uint32_t>(state.seasonResetIntervalWeeks);
+	file.WriteLE<uint32_t>(state.nextSeasonResetWeek);
+	file.WriteLE<uint32_t>(state.seasonTransitions);
+	file.WriteLE<uint32_t>(state.prestigePoints);
+	file.WriteLE<uint16_t>(state.prestigeLevel);
+	file.WriteLE<uint16_t>(state.usedClaimDedupKeys);
+	file.WriteLE<uint8_t>(state.usedRankingSnapshots);
+}
+
+void LoadRaidProgressionPayload(LoadHelper &file)
+{
+	ResetRaidProgression();
+	if (!file.IsValid(sizeof(uint8_t)))
+		return;
+
+	const uint8_t payloadVersion = file.NextLE<uint8_t>();
+	if (payloadVersion != RaidProgressionPayloadVersion)
+		return;
+
+	RaidProgressionPersistedState state {};
+	for (RaidDifficultyProgressState &difficultyState : state.difficulties) {
+		difficultyState.lockoutWeek = file.NextLE<uint32_t>();
+		difficultyState.attemptsThisWeek = file.NextLE<uint16_t>();
+		difficultyState.bestClearDurationSeconds = file.NextLE<uint16_t>();
+		difficultyState.bestBossesDefeated = file.NextLE<uint8_t>();
+		difficultyState.checkpointBossIndex = file.NextLE<uint8_t>();
+		difficultyState.checkpointObjectiveBits = file.NextLE<uint64_t>();
+		for (uint32_t &timer : difficultyState.checkpointTimersMs)
+			timer = file.NextLE<uint32_t>();
+		difficultyState.bestClearRaidId = file.NextLE<uint32_t>();
+	}
+	state.usedPlayerClaims = file.NextLE<uint16_t>();
+	for (RaidRewardClaim &claim : state.playerClaims) {
+		claim.token = file.NextLE<uint64_t>();
+		claim.guildId = file.NextLE<uint32_t>();
+		claim.raidId = file.NextLE<uint32_t>();
+		claim.playerId = file.NextLE<uint8_t>();
+		claim.activity = static_cast<GuildActivityType>(file.NextLE<uint8_t>());
+		claim.milestone = file.NextLE<uint16_t>();
+		claim.quantity = file.NextLE<uint16_t>();
+	}
+	state.usedGuildClaims = file.NextLE<uint16_t>();
+	for (RaidRewardClaim &claim : state.guildClaims) {
+		claim.token = file.NextLE<uint64_t>();
+		claim.guildId = file.NextLE<uint32_t>();
+		claim.raidId = file.NextLE<uint32_t>();
+		claim.playerId = file.NextLE<uint8_t>();
+		claim.activity = static_cast<GuildActivityType>(file.NextLE<uint8_t>());
+		claim.milestone = file.NextLE<uint16_t>();
+		claim.quantity = file.NextLE<uint16_t>();
+	}
+	ApplyRaidProgressionPersistedState(state);
+}
+
+void SaveRaidProgressionPayload(SaveHelper &file)
+{
+	file.WriteLE<uint8_t>(RaidProgressionPayloadVersion);
+	const RaidProgressionPersistedState state = GetRaidProgressionPersistedState();
+	for (const RaidDifficultyProgressState &difficultyState : state.difficulties) {
+		file.WriteLE<uint32_t>(difficultyState.lockoutWeek);
+		file.WriteLE<uint16_t>(difficultyState.attemptsThisWeek);
+		file.WriteLE<uint16_t>(difficultyState.bestClearDurationSeconds);
+		file.WriteLE<uint8_t>(difficultyState.bestBossesDefeated);
+		file.WriteLE<uint8_t>(difficultyState.checkpointBossIndex);
+		file.WriteLE<uint64_t>(difficultyState.checkpointObjectiveBits);
+		for (uint32_t timer : difficultyState.checkpointTimersMs)
+			file.WriteLE<uint32_t>(timer);
+		file.WriteLE<uint32_t>(difficultyState.bestClearRaidId);
+	}
+	file.WriteLE<uint16_t>(state.usedPlayerClaims);
+	for (const RaidRewardClaim &claim : state.playerClaims) {
+		file.WriteLE<uint64_t>(claim.token);
+		file.WriteLE<uint32_t>(claim.guildId);
+		file.WriteLE<uint32_t>(claim.raidId);
+		file.WriteLE<uint8_t>(claim.playerId);
+		file.WriteLE<uint8_t>(static_cast<uint8_t>(claim.activity));
+		file.WriteLE<uint16_t>(claim.milestone);
+		file.WriteLE<uint16_t>(claim.quantity);
+	}
+	file.WriteLE<uint16_t>(state.usedGuildClaims);
+	for (const RaidRewardClaim &claim : state.guildClaims) {
+		file.WriteLE<uint64_t>(claim.token);
+		file.WriteLE<uint32_t>(claim.guildId);
+		file.WriteLE<uint32_t>(claim.raidId);
+		file.WriteLE<uint8_t>(claim.playerId);
+		file.WriteLE<uint8_t>(static_cast<uint8_t>(claim.activity));
+		file.WriteLE<uint16_t>(claim.milestone);
+		file.WriteLE<uint16_t>(claim.quantity);
+	}
 }
 
 struct MonsterConversionData {
@@ -2727,6 +2853,7 @@ tl::expected<void, std::string> LoadGame(bool firstflag)
 	AutomapActive = file.NextBool8();
 	AutoMapScale = file.NextBE<int32_t>();
 	LoadGuildProgressionPayload(file);
+	LoadRaidProgressionPayload(file);
 	AutomapZoomReset();
 	ResyncQuests();
 
@@ -2991,6 +3118,7 @@ void SaveGameData(SaveWriter &saveWriter)
 	file.WriteLE<uint8_t>(AutomapActive ? 1 : 0);
 	file.WriteBE<int32_t>(AutoMapScale);
 	SaveGuildProgressionPayload(file);
+	SaveRaidProgressionPayload(file);
 
 	SaveAdditionalMissiles(saveWriter);
 	SaveLevelSeeds(saveWriter);

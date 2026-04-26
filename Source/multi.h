@@ -5,6 +5,7 @@
  */
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -21,7 +22,12 @@ using net::leaveinfo_t;
 struct Player;
 
 // must be unsigned to generate unsigned comparisons with pnum
-#define MAX_PLRS 4
+#define MAX_PLRS 32
+
+constexpr size_t MAX_NETMSG = 4096;
+constexpr uint32_t NET_SNAPSHOT_RATE = 20;
+constexpr uint32_t NET_SNAPSHOT_INTERVAL_MS = 1000 / NET_SNAPSHOT_RATE;
+constexpr uint32_t NET_PREDICTION_TICKS = 8;
 
 struct GameData {
 	int32_t size;

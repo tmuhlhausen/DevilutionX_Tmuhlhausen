@@ -20,6 +20,8 @@ set(libdevilutionx_SRCS
   raid/raid_state.cpp
   raid/raid_routing.cpp
   raid/encounter/encounter_engine.cpp
+  raid/encounter/encounter_schema.cpp
+  raid/encounter/weekly_modifiers.cpp
   help.cpp
   hwcursor.cpp
   interfac.cpp
@@ -83,6 +85,7 @@ set(libdevilutionx_SRCS
   dvlnet/frame_queue.cpp
   dvlnet/loopback.cpp
   dvlnet/packet.cpp
+  dvlnet/udp_transport.cpp
 
   engine/actor_position.cpp
   engine/animationinfo.cpp
@@ -94,6 +97,7 @@ set(libdevilutionx_SRCS
   engine/trn.cpp
 
   engine/render/automap_render.cpp
+  engine/render/render_backend.cpp
   engine/render/scrollrt.cpp
 
   items/validation.cpp

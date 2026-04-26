@@ -4,9 +4,11 @@
  * Implementation of the main game initialization functions.
  */
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string_view>
+#include <vector>
 
 #ifdef USE_SDL3
 #include <SDL3/SDL_events.h>
@@ -43,6 +45,8 @@
 #include "diablo_msg.hpp"
 #include "discord/discord.h"
 #include "dvlnet/net_transport_mode.hpp"
+#include "dvlnet/rollback_state.hpp"
+#include "dvlnet/net_telemetry.hpp"
 #include "doom.h"
 #include "encrypt.h"
 #include "engine/backbuffer_state.hpp"
@@ -54,6 +58,7 @@
 #include "engine/load_file.hpp"
 #include "engine/random.hpp"
 #include "engine/render/clx_render.hpp"
+#include "engine/render/render_backend.hpp"
 #include "engine/render/render_graph.hpp"
 #include "engine/sound.h"
 #include "game_mode.hpp"
@@ -180,6 +185,91 @@ bool was_archives_init = false;
 /** To know if surfaces have been initialized or not */
 bool was_window_init = false;
 bool was_ui_init = false;
+
+template <typename T>
+void AppendRollbackBytes(std::vector<std::byte> &snapshot, const T &value)
+{
+	const auto *start = reinterpret_cast<const std::byte *>(&value);
+	snapshot.insert(snapshot.end(), start, start + sizeof(T));
+}
+
+std::vector<std::byte> CaptureRollbackSnapshot()
+{
+	std::vector<std::byte> snapshot;
+	for (const Player &player : Players) {
+		const bool active = player.isActive();
+		AppendRollbackBytes(snapshot, active);
+		if (!active)
+			continue;
+		AppendRollbackBytes(snapshot, player._plrlevel);
+		AppendRollbackBytes(snapshot, player.position.tile.x);
+		AppendRollbackBytes(snapshot, player.position.tile.y);
+		AppendRollbackBytes(snapshot, player._pHitPoints);
+		AppendRollbackBytes(snapshot, player._pMana);
+		AppendRollbackBytes(snapshot, player._pmode);
+	}
+	return snapshot;
+}
+
+bool RestoreRollbackSnapshot(std::span<const std::byte> snapshot)
+{
+	size_t offset = 0;
+	auto read = [&](auto &value) -> bool {
+		constexpr size_t Size = sizeof(value);
+		if (offset + Size > snapshot.size())
+			return false;
+		memcpy(&value, snapshot.data() + offset, Size);
+		offset += Size;
+		return true;
+	};
+
+	for (Player &player : Players) {
+		bool active = false;
+		if (!read(active))
+			return false;
+		if (!active)
+			continue;
+		if (!read(player._plrlevel) || !read(player.position.tile.x) || !read(player.position.tile.y) || !read(player._pHitPoints) || !read(player._pMana) || !read(player._pmode))
+			return false;
+		player.position.future = player.position.tile;
+	}
+	return true;
+}
+
+std::vector<std::byte> CapturePredictedLocalInput()
+{
+	std::vector<std::byte> input;
+	if (MyPlayer == nullptr)
+		return input;
+	AppendRollbackBytes(input, MyPlayer->position.future.x);
+	AppendRollbackBytes(input, MyPlayer->position.future.y);
+	AppendRollbackBytes(input, MyPlayer->_pdir);
+	return input;
+}
+
+void ApplyPredictedLocalInput(std::span<const std::byte> input)
+{
+	if (MyPlayer == nullptr)
+		return;
+	size_t offset = 0;
+	auto read = [&](auto &value) -> bool {
+		constexpr size_t Size = sizeof(value);
+		if (offset + Size > input.size())
+			return false;
+		memcpy(&value, input.data() + offset, Size);
+		offset += Size;
+		return true;
+	};
+
+	decltype(MyPlayer->position.future.x) predictedX {};
+	decltype(MyPlayer->position.future.y) predictedY {};
+	decltype(MyPlayer->_pdir) predictedDir {};
+	if (!read(predictedX) || !read(predictedY) || !read(predictedDir))
+		return;
+
+	MyPlayer->position.future = { predictedX, predictedY };
+	MyPlayer->_pdir = predictedDir;
+}
 
 void StartGame(interface_mode uMsg)
 {
@@ -902,18 +992,35 @@ void RunGameLoop(interface_mode uMsg)
 			return;
 		}
 
+		RenderGraphPassStats passFrameStats {};
+		const auto capturePassStats = [&](RenderPassId passId) {
+			IRenderBackend *backend = GetActiveRenderBackend();
+			if (backend == nullptr)
+				return;
+			passFrameStats[static_cast<size_t>(passId)] = backend->GetLastFrameStats();
+		};
+
 		RenderGraph graph = CreateDefaultRenderGraph(
-		    []() { DrawAndBlit(); },
-		    []() {
-			    // Reserved for explicit UI pass migration.
+		    [&]() {
+			    DrawLegacyWorldPass();
+			    capturePassStats(RenderPassId::World);
 		    },
-		    []() {
-			    // Reserved for explicit post pass migration.
+		    [&]() {
+			    DrawLegacyUiPass();
+			    capturePassStats(RenderPassId::Ui);
+		    },
+		    [&]() {
+			    DrawLegacyPostPass();
+			    capturePassStats(RenderPassId::Post);
 		    });
-		if (!graph.Execute()) {
+		if (!graph.Validate() || !graph.Execute()) {
 			// Safety fallback to legacy path.
 			DrawAndBlit();
+			SetLastRenderGraphPassStats({});
+			return;
 		}
+
+		SetLastRenderGraphPassStats(passFrameStats);
 	};
 
 	while (gbRunGame) {
@@ -964,6 +1071,14 @@ void RunGameLoop(interface_mode uMsg)
 		if (game_loop(gbGameLoopStartup))
 			diablo_color_cyc_logic();
 		if (*GetOptions().Network.rollback) {
+			const NetTickTelemetrySample telemetry = GetNetTelemetryAggregator().RollingSample();
+			dvlnet::RollbackReplayPolicyProfile profile = dvlnet::RollbackReplayPolicyProfile::Balanced;
+			if (telemetry.anomalyDropBurst || telemetry.anomalyLatency)
+				profile = dvlnet::RollbackReplayPolicyProfile::Conservative;
+			else if (telemetry.rttMs < 90.0F && telemetry.dropPct < 1.5F && telemetry.resendPct < 2.5F)
+				profile = dvlnet::RollbackReplayPolicyProfile::Aggressive;
+			dvlnet::GetRollbackState().SetReplayPolicyProfile(profile);
+
 			uint32_t simStateHash = 2166136261u;
 			for (const Player &player : Players) {
 				if (!player.isActive())
@@ -980,6 +1095,23 @@ void RunGameLoop(interface_mode uMsg)
 				simStateHash *= 16777619u;
 			}
 			nthread_RecordSimStateHash(simStateHash);
+			const std::vector<std::byte> snapshot = CaptureRollbackSnapshot();
+			dvlnet::GetRollbackState().StoreSnapshot(SimTickCount, snapshot, simStateHash);
+			const std::vector<std::byte> predictedInput = CapturePredictedLocalInput();
+			dvlnet::GetRollbackState().QueuePredictedInput(SimTickCount, predictedInput);
+			ApplyPredictedLocalInput(predictedInput);
+			const uint32_t rollbackStart = SDL_GetTicks();
+			const std::optional<dvlnet::RollbackTickMetadata> authoritativeState = dvlnet::GetRollbackState().ConsumeAuthoritativeState();
+			if (authoritativeState.has_value()) {
+				dvlnet::GetRollbackState().HandleCorrection(authoritativeState->tick, authoritativeState->stateHash, SimTickCount,
+				    [](std::span<const std::byte> snapshotBytes) {
+					    return RestoreRollbackSnapshot(snapshotBytes);
+				    },
+				    [](std::span<const std::byte> input) {
+					    ApplyPredictedLocalInput(input);
+				    });
+			}
+			GetNetTelemetryAggregator().RecordRollbackMs(static_cast<float>(SDL_GetTicks() - rollbackStart));
 		}
 		gbGameLoopStartup = false;
 		if (drawGame)
@@ -2211,6 +2343,16 @@ void InitKeymapActions()
 	    },
 	    nullptr,
 	    CanPlayerTakeAction);
+	options.Keymapper.AddAction(
+	    "ToggleNetworkDebugOverlay",
+	    N_("Toggle network debug overlay"),
+	    N_("Shows or hides rolling transport and rollback telemetry."),
+	    SDLK_UNKNOWN,
+	    [] {
+		    GetOptions().Network.netDebugOverlay.SetValue(!*GetOptions().Network.netDebugOverlay);
+	    },
+	    nullptr,
+	    IsGameRunning);
 	options.Keymapper.AddAction(
 	    "ChatLog",
 	    N_("Chat Log"),
