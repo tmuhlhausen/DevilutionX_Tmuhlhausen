@@ -12,6 +12,8 @@ void LuaInitialize();
 void LuaReloadActiveMods();
 void LuaShutdown();
 
+[[nodiscard]] bool IsValidLuaPackageName(std::string_view packageName);
+
 sol::state &GetLuaState();
 sol::environment CreateLuaSandbox();
 sol::object SafeCallResult(sol::protected_function_result result, bool optional);
