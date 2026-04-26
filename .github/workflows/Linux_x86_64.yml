@@ -90,6 +90,14 @@ jobs:
     - name: Package AppImage
       run: Packaging/nix/AppImage.sh && mv devilutionx.appimage devilutionx-x86_64-linux-gnu.appimage
 
+    - name: Generate Release Provenance
+      run: |
+        python3 tools/release_provenance.py \
+          devilutionx-x86_64-linux-gnu.tar.xz \
+          devilutionx-x86_64-linux-gnu.appimage
+        cp build/release-provenance/release-provenance.json devilutionx-x86_64-linux-gnu.provenance.json
+        cp build/release-provenance/release-provenance.md devilutionx-x86_64-linux-gnu.provenance.md
+
     - name: Upload Package
       if: ${{ !env.ACT }}
       uses: actions/upload-artifact@v7
@@ -103,6 +111,17 @@ jobs:
       with:
         name: devilutionx-x86_64-linux-gnu.appimage
         path: devilutionx-x86_64-linux-gnu.appimage
+
+    - name: Upload Release Provenance
+      if: ${{ !env.ACT }}
+      uses: actions/upload-artifact@v7
+      with:
+        name: devilutionx-x86_64-linux-gnu-provenance
+        path: |
+          build/release-provenance/release-provenance.json
+          build/release-provenance/release-provenance.md
+          devilutionx-x86_64-linux-gnu.provenance.json
+          devilutionx-x86_64-linux-gnu.provenance.md
 
     - name: Update Release
       if: ${{ github.event_name == 'release' && !env.ACT }}
