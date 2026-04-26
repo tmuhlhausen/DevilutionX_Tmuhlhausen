@@ -1,0 +1,33 @@
+name: Dependency Inventory
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+  schedule:
+    - cron: '17 5 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inventory:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Generate dependency inventory
+        run: python3 tools/dependency_inventory.py
+
+      - name: Upload dependency inventory
+        uses: actions/upload-artifact@v7
+        with:
+          name: dependency-inventory
+          path: build/dependency-inventory/
