@@ -14,11 +14,10 @@ on:
       - 'docs/**'
 
 permissions:
-  contents: write
+  contents: read
 
 env:
   VCPKG_FEATURE_FLAGS: dependencygraph
-  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
