@@ -70,11 +70,27 @@ For a dependency vulnerability:
 4. Add a regression test or release note when applicable.
 5. Record the outcome in the issue or PR.
 
+## CI dependency inventory artifact
+
+The `Dependency Inventory` workflow runs `tools/dependency_inventory.py` on pushes, pull requests, a weekly schedule, and manual dispatch.
+
+It uploads a `dependency-inventory` artifact containing:
+
+- `dependency-inventory.json`
+- `dependency-inventory.md`
+
+The report uses repository-local metadata only:
+
+- `vcpkg.json`
+- GitHub Actions `uses:` references from `.github/workflows/`
+- Vendored dependency directories under `3rdParty/`
+
+Review this artifact during dependency bumps, release preparation, and security triage.
+
 ## CI artifacts to add next
 
 Future improvements should generate and upload:
 
-- A vcpkg manifest/baseline report.
-- A third-party dependency inventory.
 - A release artifact dependency summary.
 - A security-review checklist for crypto/networking changes.
+- Optional CVE/advisory annotations for the generated inventory.
