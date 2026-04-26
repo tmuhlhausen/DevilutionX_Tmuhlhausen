@@ -1,5 +1,7 @@
 #pragma once
 
+#include <array>
+#include <cstddef>
 #include <cstdint>
 #include <string_view>
 
@@ -11,6 +13,9 @@ struct RenderFrameStats {
 	float gpuFrameMs;
 };
 
+constexpr size_t RenderGraphPassCount = 3;
+using RenderGraphPassStats = std::array<RenderFrameStats, RenderGraphPassCount>;
+
 class IRenderBackend {
 public:
 	virtual ~IRenderBackend() = default;
@@ -21,5 +26,11 @@ public:
 	virtual void EndFrame() = 0;
 	virtual RenderFrameStats GetLastFrameStats() const = 0;
 };
+
+void SetActiveRenderBackend(IRenderBackend *backend);
+[[nodiscard]] IRenderBackend *GetActiveRenderBackend();
+
+void SetLastRenderGraphPassStats(const RenderGraphPassStats &passStats);
+[[nodiscard]] const RenderGraphPassStats &GetLastRenderGraphPassStats();
 
 } // namespace devilution

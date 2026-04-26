@@ -51,12 +51,14 @@ struct EncounterMechanic {
 	uint32_t firstTriggerMs = 0;
 	uint8_t phaseId = 0;
 	bool repeat = true;
+	std::optional<EncounterCondition> triggerCondition;
 };
 
 struct EncounterPhaseDef {
 	uint8_t id = 0;
 	std::optional<EncounterCondition> enterCondition;
 	std::optional<EncounterCondition> exitCondition;
+	std::optional<uint8_t> nextPhaseId;
 	EncounterFailurePolicy failurePolicy = EncounterFailurePolicy::Wipe;
 };
 

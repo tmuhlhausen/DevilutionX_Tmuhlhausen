@@ -1,14 +1,24 @@
 #include "control_chat_commands.hpp"
 #include "control.hpp"
 
-#include <SDL_timer.h>
+#include <algorithm>
+#include <bit>
+
+#ifdef USE_SDL3
+#include <SDL3/SDL_timer.h>
+#else
+#include <SDL.h>
+#endif
 
 #include "diablo_msg.hpp"
 #include "engine/backbuffer_state.hpp"
 #include "inv.h"
 #include "levels/setmaps.h"
 #include "msg.h"
+#include "guild/guild_mod_api.hpp"
 #include "raid/raid.hpp"
+#include "raid/raid_mod_api.hpp"
+#include "raid/raid_progression.hpp"
 #include "storm/storm_net.hpp"
 #include "utils/algorithm/container.hpp"
 #include "utils/log.hpp"
@@ -24,7 +34,37 @@ namespace devilution {
 
 namespace {
 
-uint32_t RaidChatSequence = 1;
+constexpr uint8_t RaidMinimumMembersToStart = 2;
+uint32_t NextRaidChatSequence = 1;
+
+[[nodiscard]] uint32_t ConsumeRaidChatSequence()
+{
+	return NextRaidChatSequence++;
+}
+
+[[nodiscard]] bool RequiresHostAuthority(const std::string_view action)
+{
+	return action == "create" || action == "invite" || action == "start" || action == "reset";
+}
+
+[[nodiscard]] std::string GetRaidPhaseLabel(RaidPhase phase)
+{
+	switch (phase) {
+	case RaidPhase::Inactive:
+		return _("Inactive");
+	case RaidPhase::Forming:
+		return _("Forming");
+	case RaidPhase::InProgress:
+		return _("In Progress");
+	case RaidPhase::Completed:
+		return _("Completed");
+	case RaidPhase::Failed:
+		return _("Failed");
+	case RaidPhase::LockedOut:
+		return _("Locked Out");
+	}
+	return _("Unknown");
+}
 
 struct TextCmdItem {
 	const std::string text;
@@ -251,100 +291,135 @@ std::string TextCmdPing(const std::string_view parameter)
 	return ret;
 }
 
-std::string DescribeRaidStatus()
-{
-	const RaidInstanceState state = GetActiveRaidState();
-	if (!state.raidId.IsValid())
-		return _("Raid: inactive");
-
-	size_t activeEncounter = 0;
-	for (size_t i = 0; i < state.bossStates.size(); i++) {
-		if (state.bossStates[i] != RaidEncounterState::Defeated) {
-			activeEncounter = i + 1;
-			break;
-		}
-	}
-
-	const int failedEncounters = static_cast<int>(c_count(state.bossStates, RaidEncounterState::Failed));
-	const int attemptsLeft = std::max(0, 3 - failedEncounters);
-
-	return StrCat(
-	    _("Raid "), state.raidId.value,
-	    _(" | Ready "), GetRaidReadyMemberCount(), "/", GetRaidJoinedMemberCount(),
-	    _(" | Enc "), activeEncounter,
-	    _(" | Attempts "), attemptsLeft);
-}
-
 std::string TextCmdRaid(const std::string_view parameter)
 {
 	if (!gbIsMultiplayer)
-		return _("Raid commands are only available in multiplayer.");
-
-	if (parameter.empty())
-		return _("Usage: /raid create|invite <player>|join|leave|ready|start|status");
+		return _("Raids are only supported in multiplayer.");
 
 	const std::string param = AsciiStrToLower(parameter);
-	const RaidInstanceState raid = GetActiveRaidState();
+	const size_t splitPos = param.find(' ');
+	const std::string action = splitPos == std::string::npos ? param : param.substr(0, splitPos);
+	const std::string actionParam = splitPos == std::string::npos ? "" : param.substr(splitPos + 1);
+	if (action.empty())
+		return _("Usage: /raid <create|invite|join|ready|start|status|reset> [player]");
 
-	auto sendWithSnapshot = [&](auto send) {
-		send(false, raid.raidId.value, raid.snapshotRevision, RaidChatSequence++);
-	};
+	if (RequiresHostAuthority(action) && MyPlayerId != 0) {
+		return StrCat(_("Raid action '/raid "), action, _("' is host-only. Ask the game host to run it."));
+	}
 
-	if (param == "status")
-		return DescribeRaidStatus();
+	RaidInstanceState state = GetActiveRaidState();
+	const uint32_t currentRaidId = state.raidId.IsValid() ? state.raidId.value : (SDL_GetTicks() | 1U);
 
-	if (param == "create") {
-		if (MyPlayerId != 0)
-			return _("Raid create denied: host only.");
-		const uint32_t raidId = SDL_GetTicks();
-		NetSendCmdRaidCreate(false, raidId, RaidDifficulty::Normal, raid.snapshotRevision, RaidChatSequence++);
+	if (action == "create") {
+		NetSendCmdRaidCreate(true, currentRaidId, RaidDifficulty::Normal, state.snapshotRevision, ConsumeRaidChatSequence());
 		return _("Raid create request sent.");
 	}
 
-	if (param == "join") {
-		if (!raid.raidId.IsValid())
-			return _("No active raid to join.");
-		sendWithSnapshot(NetSendCmdRaidJoin);
+	if (action == "invite") {
+		if (actionParam.empty())
+			return _("Usage: /raid invite <player name>");
+		auto it = c_find_if(Players, [&](const Player &player) {
+			return player.plractive && AsciiStrToLower(player._pName).find(actionParam) != std::string::npos;
+		});
+		if (it == Players.end())
+			return _("No players found with such a name");
+		NetSendCmdRaidInvite(true, currentRaidId, it->getId(), state.snapshotRevision, ConsumeRaidChatSequence());
+		return StrCat(_("Raid invite request sent to "), it->_pName, ".");
+	}
+
+	if (action == "join") {
+		NetSendCmdRaidJoin(true, currentRaidId, state.snapshotRevision, ConsumeRaidChatSequence());
 		return _("Raid join request sent.");
 	}
 
-	if (param == "leave") {
-		if (!raid.raidId.IsValid())
-			return _("No active raid.");
-		sendWithSnapshot(NetSendCmdRaidLeave);
-		return _("Raid leave request sent.");
+	if (action == "ready") {
+		NetSendCmdRaidReadyToggle(true, currentRaidId, state.snapshotRevision, ConsumeRaidChatSequence());
+		return _("Raid readiness toggle sent.");
 	}
 
-	if (param == "ready") {
-		if (!raid.raidId.IsValid())
-			return _("No active raid.");
-		sendWithSnapshot(NetSendCmdRaidReadyToggle);
-		return _("Raid ready toggle sent.");
-	}
-
-	if (param == "start") {
-		if (MyPlayerId != 0)
-			return _("Raid start denied: host only.");
-		if (!raid.raidId.IsValid())
-			return _("No active raid.");
-		sendWithSnapshot(NetSendCmdRaidStart);
+	if (action == "start") {
+		NetSendCmdRaidStart(true, currentRaidId, state.snapshotRevision, ConsumeRaidChatSequence());
 		return _("Raid start request sent.");
 	}
 
-	if (param.find("invite ") == 0) {
-		if (!raid.raidId.IsValid())
-			return _("No active raid.");
-		const std::string targetName = std::string(param.substr(7));
-		auto it = c_find_if(Players, [&targetName](const Player &player) {
-			return player.plractive && AsciiStrToLower(player._pName) == targetName;
-		});
-		if (it == Players.end())
-			return _("Raid invite failed: player not found.");
-		NetSendCmdRaidInvite(false, raid.raidId.value, it->getId(), raid.snapshotRevision, RaidChatSequence++);
-		return StrCat(_("Raid invite sent to "), it->_pName, ".");
+	if (action == "reset") {
+		const uint32_t resetRaidId = (SDL_GetTicks() | 1U);
+		NetSendCmdRaidCreate(true, resetRaidId, state.difficulty == RaidDifficulty::None ? RaidDifficulty::Normal : state.difficulty, state.snapshotRevision, ConsumeRaidChatSequence());
+		return _("Raid reset request sent.");
 	}
 
-	return _("Usage: /raid create|invite <player>|join|leave|ready|start|status");
+	if (action == "status") {
+		const RaidLobbyUiState lobbyState = GetActiveRaidLobbyUiState();
+		const int readyCount = static_cast<int>(std::popcount(lobbyState.readyMask));
+		const int joinedCount = static_cast<int>(std::popcount(lobbyState.joinedMask));
+		return StrCat(
+		    _("Raid status"),
+		    "\n",
+		    _("Phase: "), GetRaidPhaseLabel(state.phase),
+		    "\n",
+		    _("Members: "), joinedCount, "/8",
+		    "\n",
+		    _("Ready: "), readyCount, "/", std::max(joinedCount, static_cast<int>(RaidMinimumMembersToStart)),
+		    "\n",
+		    _("Attempts left: "), static_cast<int>(lobbyState.attemptsLeft));
+	}
+
+	return _("Usage: /raid <create|invite|join|ready|start|status|reset> [player]");
+}
+
+std::string TextCmdOps(const std::string_view parameter)
+{
+	const std::string param = AsciiStrToLower(parameter);
+	if (param.empty())
+		return _("Usage: /ops <snapshot|raiddiag|repairprog>");
+
+	if (param == "snapshot") {
+		const RaidInstanceState raidState = GetActiveRaidState();
+		const GuildHallState guildState = GetGuildHallState();
+		const RaidModCompatibilityStatus raidCompat = GetRaidModCompatibilityStatus();
+		const GuildModCompatibilityStatus guildCompat = GetGuildModCompatibilityStatus();
+		return StrCat(
+		    _("Ops snapshot"),
+		    "\n",
+		    _("Raid phase: "), GetRaidPhaseLabel(raidState.phase),
+		    "\n",
+		    _("Raid sequence: "), raidState.sequence,
+		    "\n",
+		    _("Guild id: "), guildState.guildId.value,
+		    "\n",
+		    _("Guild members: "), static_cast<int>(guildState.memberCount),
+		    "\n",
+		    _("Raid API compatible: "), raidCompat.compatible ? "yes" : "no", " (v", raidCompat.requestedVersion, " -> v", raidCompat.activeVersion, ")",
+		    "\n",
+		    _("Guild API compatible: "), guildCompat.compatible ? "yes" : "no", " (v", guildCompat.requestedVersion, " -> v", guildCompat.activeVersion, ")");
+	}
+
+	if (param == "raiddiag") {
+		const RaidInstanceState state = GetActiveRaidState();
+		return StrCat(
+		    _("Raid diagnostics"),
+		    "\n",
+		    _("Raid id: "), state.raidId.value,
+		    "\n",
+		    _("Difficulty: "), static_cast<int>(state.difficulty),
+		    "\n",
+		    _("Members joined: "), static_cast<int>(GetRaidMemberCount(state)),
+		    "\n",
+		    _("Members ready: "), static_cast<int>(GetRaidReadyCount(state)),
+		    "\n",
+		    _("Revision/Sequence: "), state.snapshotRevision, "/", state.sequence,
+		    "\n",
+		    _("Lockout expiration tick: "), state.lockoutExpirationTick);
+	}
+
+	if (param == "repairprog") {
+		ClearRaidCheckpoint(RaidDifficulty::Normal);
+		ClearRaidCheckpoint(RaidDifficulty::Nightmare);
+		ClearRaidCheckpoint(RaidDifficulty::Hell);
+		return _("Progression repair complete: cleared raid checkpoints for all difficulties.");
+	}
+
+	return _("Usage: /ops <snapshot|raiddiag|repairprog>");
 }
 
 std::vector<TextCmdItem> TextCmdList = {
@@ -354,7 +429,8 @@ std::vector<TextCmdItem> TextCmdList = {
 	{ "/inspect", N_("Inspects stats and equipment of another player."), N_("<player name>"), &TextCmdInspect },
 	{ "/seedinfo", N_("Show seed infos for current level."), "", &TextCmdLevelSeed },
 	{ "/ping", N_("Show latency statistics for another player."), N_("<player name>"), &TextCmdPing },
-	{ "/raid", N_("Raid controls: create, invite, join, leave, ready, start, status."), N_("<subcommand>"), &TextCmdRaid },
+	{ "/raid", N_("Manage raid lobby actions and status."), N_("<create|invite|join|ready|start|status|reset> [player]"), &TextCmdRaid },
+	{ "/ops", N_("Operator tools for telemetry and raid/guild diagnostics."), N_("<snapshot|raiddiag|repairprog>"), &TextCmdOps },
 };
 
 } // namespace

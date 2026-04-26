@@ -117,6 +117,8 @@ void EncounterEngine::Tick(bool isHost)
 			continue;
 		if (lastMechanicTriggerMs_[i] != 0 && mechanic.periodMs != 0 && snapshot.nowMs - lastMechanicTriggerMs_[i] < mechanic.periodMs)
 			continue;
+		if (mechanic.triggerCondition && !EvaluateCondition(*mechanic.triggerCondition, snapshot))
+			continue;
 
 		lastMechanicTriggerMs_[i] = snapshot.nowMs;
 		EmitEvent(isHost, EncounterEvent { EncounterEventType::MechanicTriggered, snapshot.nowMs, activePhaseId_, mechanic.id });
@@ -135,14 +137,24 @@ void EncounterEngine::Tick(bool isHost)
 
 	if (activePhase->exitCondition && EvaluateCondition(*activePhase->exitCondition, snapshot)) {
 		ExitPhase(isHost, activePhaseId_, snapshot.nowMs);
-		const auto nextPhase = std::find_if(definition_.phases.begin(), definition_.phases.end(), [this](const EncounterPhaseDef &phase) {
-			return phase.id > activePhaseId_;
-		});
-		if (nextPhase == definition_.phases.end()) {
-			completed_ = true;
-			EmitEvent(isHost, EncounterEvent { EncounterEventType::EncounterCompleted, snapshot.nowMs, activePhaseId_ });
+		if (activePhase->nextPhaseId) {
+			const EncounterPhaseDef *scripted = FindPhaseById(*activePhase->nextPhaseId);
+			if (scripted != nullptr) {
+				EnterPhase(isHost, scripted->id, snapshot.nowMs);
+			} else {
+				completed_ = true;
+				EmitEvent(isHost, EncounterEvent { EncounterEventType::EncounterCompleted, snapshot.nowMs, activePhaseId_ });
+			}
 		} else {
-			EnterPhase(isHost, nextPhase->id, snapshot.nowMs);
+			const auto nextPhase = std::find_if(definition_.phases.begin(), definition_.phases.end(), [this](const EncounterPhaseDef &phase) {
+				return phase.id > activePhaseId_;
+			});
+			if (nextPhase == definition_.phases.end()) {
+				completed_ = true;
+				EmitEvent(isHost, EncounterEvent { EncounterEventType::EncounterCompleted, snapshot.nowMs, activePhaseId_ });
+			} else {
+				EnterPhase(isHost, nextPhase->id, snapshot.nowMs);
+			}
 		}
 	}
 

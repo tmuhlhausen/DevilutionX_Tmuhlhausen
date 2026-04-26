@@ -48,10 +48,15 @@ set(tests
   char_panel_test
   game_menu_test
   gameplay_feature_flags_test
+  guild_progression_test
   raid_state_test
   raid_protocol_test
   raid_progression_test
   raid_sync_test
+  rollback_state_test
+  encounter_schema_test
+  encounter_engine_phase_test
+  weekly_modifier_test
 )
 set(standalone_tests
   codec_test
@@ -63,6 +68,7 @@ set(standalone_tests
   net_transport_factory_test
   net_chaos_test
   net_qos_test
+  net_telemetry_trace_test
   net_transport_mode_test
   palette_blending_test
   parse_int_test
@@ -70,6 +76,7 @@ set(standalone_tests
   vision_test
   random_test
   render_graph_test
+  render_backend_contract_test
   rectangle_test
   static_vector_test
   str_cat_test

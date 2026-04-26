@@ -18,6 +18,7 @@
 #endif
 
 #include <ankerl/unordered_dense.h>
+#include <fmt/format.h>
 
 #include "DiabloUI/ui_flags.hpp"
 #include "automap.h"
@@ -27,6 +28,7 @@
 #include "dead.h"
 #include "diablo_msg.hpp"
 #include "doom.h"
+#include "dvlnet/net_telemetry.hpp"
 #include "engine/backbuffer_state.hpp"
 #include "engine/displacement.hpp"
 #include "engine/dx.h"
@@ -1482,6 +1484,26 @@ void DrawFPS(const Surface &out)
 	DrawString(out, formatted, Point { 8, 8 }, { .flags = UiFlags::ColorRed });
 }
 
+void DrawNetworkTelemetryOverlay(const Surface &out)
+{
+	if (!*GetOptions().Network.netDebugOverlay)
+		return;
+
+	const NetTickTelemetrySample telemetry = GetNetTelemetryAggregator().RollingSample();
+	const std::string text = fmt::format("NET RTT {:.1f}/{:.1f}ms JIT95 {:.1f}ms DROP {:.1f}% RESEND {:.1f}% DIV {} RB {:.2f}ms A[{}{}{}]",
+	    telemetry.rttMs,
+	    telemetry.rttP95Ms,
+	    telemetry.jitterP95Ms,
+	    telemetry.dropPct,
+	    telemetry.resendPct,
+	    telemetry.divergenceCount,
+	    telemetry.rollbackMs,
+	    telemetry.anomalyLatency ? "L" : "-",
+	    telemetry.anomalyDropBurst ? "D" : "-",
+	    telemetry.anomalyDivergence ? "V" : "-");
+	DrawString(out, text, Point { 8, 26 }, { .flags = UiFlags::ColorRed });
+}
+
 /**
  * @brief Update part of the screen from the back buffer
  */
@@ -1831,66 +1853,94 @@ void scrollrt_draw_game_screen()
 
 void DrawAndBlit()
 {
-	if (!gbRunGame || HeadlessMode) {
+	DrawLegacyWorldPass();
+	DrawLegacyUiPass();
+	DrawLegacyPostPass();
+}
+
+namespace {
+
+struct LegacyDrawPassState {
+	int hgt;
+	bool drawHealth;
+	bool drawMana;
+	bool drawControlButtons;
+	bool drawBelt;
+	bool drawChatInput;
+	bool drawInfoBox;
+	bool drawCtrlPan;
+	Rectangle mainPanel;
+	bool active;
+};
+
+LegacyDrawPassState LegacyState {};
+
+} // namespace
+
+void DrawLegacyWorldPass()
+{
+	LegacyState = {};
+	if (!gbRunGame || HeadlessMode)
 		return;
-	}
 
-	int hgt = 0;
-	bool drawHealth = IsRedrawComponent(PanelDrawComponent::Health);
-	bool drawMana = IsRedrawComponent(PanelDrawComponent::Mana);
-	bool drawControlButtons = IsRedrawComponent(PanelDrawComponent::ControlButtons);
-	bool drawBelt = IsRedrawComponent(PanelDrawComponent::Belt);
-	const bool drawChatInput = ChatFlag;
-	bool drawInfoBox = false;
-	bool drawCtrlPan = false;
+	LegacyState.drawHealth = IsRedrawComponent(PanelDrawComponent::Health);
+	LegacyState.drawMana = IsRedrawComponent(PanelDrawComponent::Mana);
+	LegacyState.drawControlButtons = IsRedrawComponent(PanelDrawComponent::ControlButtons);
+	LegacyState.drawBelt = IsRedrawComponent(PanelDrawComponent::Belt);
+	LegacyState.drawChatInput = ChatFlag;
+	LegacyState.mainPanel = GetMainPanel();
+	LegacyState.active = true;
 
-	const Rectangle &mainPanel = GetMainPanel();
-
-	if (gnScreenWidth > mainPanel.size.width || IsRedrawEverything()) {
-		drawHealth = true;
-		drawMana = true;
-		drawControlButtons = true;
-		drawBelt = true;
-		drawInfoBox = false;
-		drawCtrlPan = true;
-		hgt = gnScreenHeight;
+	if (gnScreenWidth > LegacyState.mainPanel.size.width || IsRedrawEverything()) {
+		LegacyState.drawHealth = true;
+		LegacyState.drawMana = true;
+		LegacyState.drawControlButtons = true;
+		LegacyState.drawBelt = true;
+		LegacyState.drawInfoBox = false;
+		LegacyState.drawCtrlPan = true;
+		LegacyState.hgt = gnScreenHeight;
 	} else if (IsRedrawViewport()) {
-		drawInfoBox = true;
-		drawCtrlPan = false;
-		hgt = gnViewportHeight;
+		LegacyState.drawInfoBox = true;
+		LegacyState.drawCtrlPan = false;
+		LegacyState.hgt = gnViewportHeight;
 	}
 
 	const Surface &out = GlobalBackBuffer();
 	UndrawCursor(out);
-
 	nthread_UpdateProgressToNextGameTick();
-
 	DrawView(out, ViewPosition);
-	if (drawCtrlPan) {
+}
+
+void DrawLegacyUiPass()
+{
+	if (!LegacyState.active)
+		return;
+
+	const Surface &out = GlobalBackBuffer();
+	if (LegacyState.drawCtrlPan) {
 		DrawMainPanel(out);
 	}
-	if (drawHealth) {
-		DrawLifeFlaskLower(out, !drawCtrlPan);
+	if (LegacyState.drawHealth) {
+		DrawLifeFlaskLower(out, !LegacyState.drawCtrlPan);
 	}
-	if (drawMana) {
-		DrawManaFlaskLower(out, !drawCtrlPan);
-
+	if (LegacyState.drawMana) {
+		DrawManaFlaskLower(out, !LegacyState.drawCtrlPan);
 		DrawSpell(out);
 	}
-	if (drawControlButtons) {
+	if (LegacyState.drawControlButtons) {
 		DrawMainPanelButtons(out);
 	}
-	if (drawBelt) {
+	if (LegacyState.drawBelt) {
 		DrawInvBelt(out);
 	}
-	if (drawChatInput) {
+	if (LegacyState.drawChatInput) {
 		DrawChatBox(out);
 	}
 	DrawXPBar(out);
 	if (*GetOptions().Gameplay.showHealthValues)
-		DrawFlaskValues(out, { mainPanel.position.x + 134, mainPanel.position.y + 28 }, MyPlayer->_pHitPoints >> 6, MyPlayer->_pMaxHP >> 6);
+		DrawFlaskValues(out, { LegacyState.mainPanel.position.x + 134, LegacyState.mainPanel.position.y + 28 }, MyPlayer->_pHitPoints >> 6, MyPlayer->_pMaxHP >> 6);
 	if (*GetOptions().Gameplay.showManaValues)
-		DrawFlaskValues(out, { mainPanel.position.x + mainPanel.size.width - 138, mainPanel.position.y + 28 },
+		DrawFlaskValues(out, { LegacyState.mainPanel.position.x + LegacyState.mainPanel.size.width - 138, LegacyState.mainPanel.position.y + 28 },
 		    (HasAnyOf(InspectPlayer->_pIFlags, ItemSpecialEffect::NoMana) || MyPlayer->hasNoMana()) ? 0 : MyPlayer->_pMana >> 6,
 		    HasAnyOf(InspectPlayer->_pIFlags, ItemSpecialEffect::NoMana) ? 0 : MyPlayer->_pMaxMana >> 6);
 	if (*GetOptions().Gameplay.floatingInfoBox)
@@ -1900,12 +1950,17 @@ void DrawAndBlit()
 		DrawPartyMemberInfoPanel(out);
 
 	DrawCursor(out);
-
 	DrawFPS(out);
-
 	lua::GameDrawComplete();
+}
 
-	DrawMain(hgt, drawInfoBox, drawHealth, drawMana, drawBelt, drawControlButtons);
+void DrawLegacyPostPass()
+{
+	if (!LegacyState.active)
+		return;
+
+	const Surface &out = GlobalBackBuffer();
+	DrawMain(LegacyState.hgt, LegacyState.drawInfoBox, LegacyState.drawHealth, LegacyState.drawMana, LegacyState.drawBelt, LegacyState.drawControlButtons);
 
 #ifdef _DEBUG
 	DrawConsole(out);
@@ -1919,6 +1974,7 @@ void DrawAndBlit()
 	}
 
 	RenderPresent();
+	LegacyState.active = false;
 }
 
 } // namespace devilution
