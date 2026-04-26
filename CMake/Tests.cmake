@@ -49,6 +49,7 @@ set(tests
   game_menu_test
   gameplay_feature_flags_test
   guild_progression_test
+  guild_test
   raid_state_test
   raid_protocol_test
   raid_progression_test
