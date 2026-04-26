@@ -61,6 +61,7 @@ bool IsRoleAtLeast(MemberRole role, MemberRole minimumRole);
 void ResetGuildState();
 GuildHallState GetGuildHallState();
 GuildMemberState GetGuildMemberState(uint8_t playerId);
+bool HasGuildInvite(uint8_t playerId);
 bool IsGuildRateLimited(uint8_t playerId, uint8_t actionKey, uint32_t minIntervalMs);
 
 bool CreateGuild(uint8_t creatorPlayerId, std::string_view guildName);
