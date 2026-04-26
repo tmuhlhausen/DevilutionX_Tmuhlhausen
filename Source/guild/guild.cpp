@@ -14,6 +14,11 @@
 #include "multi.h"
 #include "player.h"
 
+// TODO: Move this implementation into Source/CMakeLists.txt once the source list is refactored
+// enough to make small, low-risk CMake changes. Keeping the implementation in this translation
+// unit prevents unresolved guild mod hook symbols while preserving the existing build layout.
+#include "guild/guild_mod_api.cpp"
+
 namespace devilution {
 namespace {
 
