@@ -66,6 +66,7 @@ set(standalone_tests
   file_util_test
   format_int_test
   ini_test
+  lua_package_name_test
   net_transport_factory_test
   net_chaos_test
   net_qos_test
@@ -165,6 +166,7 @@ target_link_dependencies(path_benchmark PRIVATE libdevilutionx_pathfinding app_f
 target_link_dependencies(random_test PRIVATE libdevilutionx_random)
 target_link_dependencies(static_vector_test PRIVATE libdevilutionx_random app_fatal_for_testing)
 target_link_dependencies(str_cat_test PRIVATE libdevilutionx_strings)
+target_link_dependencies(lua_package_name_test PRIVATE libdevilutionx_so)
 if(DEVILUTIONX_SCREENSHOT_FORMAT STREQUAL DEVILUTIONX_SCREENSHOT_FORMAT_PNG AND NOT USE_SDL1)
   target_link_dependencies(text_render_integration_test
     PRIVATE

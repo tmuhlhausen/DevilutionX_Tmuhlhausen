@@ -1,5 +1,7 @@
 #include "lua/lua_global.hpp"
 
+#include <algorithm>
+#include <cctype>
 #include <optional>
 #include <string_view>
 
@@ -44,7 +46,7 @@ namespace {
 struct LuaState {
 	sol::state sol = {};
 	sol::table commonPackages = {};
-	ankerl::unordered_dense::segmented_map<std::string, sol::bytecode> compiledScripts = {};
+	tankerl::unordered_dense::segmented_map<std::string, sol::bytecode> compiledScripts = {};
 	sol::environment sandbox = {};
 	sol::table events = {};
 };
@@ -75,6 +77,11 @@ end
 sol::object LuaLoadScriptFromAssets(std::string_view packageName)
 {
 	LuaState &luaState = *CurrentLuaState;
+	if (!IsValidLuaPackageName(packageName)) {
+		sol::stack::push(luaState.sol.lua_state(), StrCat("Invalid Lua package name: ", packageName));
+		return sol::stack_object(luaState.sol.lua_state(), -1);
+	}
+
 	constexpr std::string_view PathPrefix = "lua\\";
 	constexpr std::string_view PathSuffix = ".lua";
 	std::string path;
@@ -161,6 +168,29 @@ void Sol2DebugPrintStack(lua_State *state)
 void Sol2DebugPrintSection(const std::string &message, lua_State *state)
 {
 	LogDebug("-- {} -- [ {} ]", message, sol::detail::debug::dump_types(state));
+}
+
+bool IsValidLuaPackageName(std::string_view packageName)
+{
+	if (packageName.empty() || packageName.front() == '.' || packageName.back() == '.')
+		return false;
+
+	bool previousWasSeparator = false;
+	for (const char c : packageName) {
+		if (c == '.') {
+			if (previousWasSeparator)
+				return false;
+			previousWasSeparator = true;
+			continue;
+		}
+
+		previousWasSeparator = false;
+		const unsigned char value = static_cast<unsigned char>(c);
+		if (!std::isalnum(value) && c != '_')
+			return false;
+	}
+
+	return true;
 }
 
 sol::environment CreateLuaSandbox()
