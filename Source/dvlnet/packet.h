@@ -49,9 +49,11 @@ typedef uint32_t cookie_t;
 typedef uint32_t timestamp_t;
 #ifdef PACKET_ENCRYPTION
 typedef std::array<unsigned char, crypto_secretbox_KEYBYTES> key_t;
+typedef std::array<unsigned char, crypto_pwhash_argon2id_SALTBYTES> salt_t;
 #else
-// Stub out the key_t definition as we're not doing any encryption.
+// Stub out the key_t and salt_t definitions as we're not doing any encryption.
 using key_t = uint8_t;
+using salt_t = uint8_t;
 #endif
 
 struct turn_t {
@@ -469,6 +471,8 @@ public:
 
 	packet_factory();
 	packet_factory(std::string pw);
+	packet_factory(std::string pw, salt_t salt);
+	static salt_t GenerateSalt();
 	tl::expected<std::unique_ptr<packet>, PacketError> make_packet(buffer_t buf);
 	template <packet_type t, typename... Args>
 	tl::expected<std::unique_ptr<packet>, PacketError> make_packet(Args... args);
