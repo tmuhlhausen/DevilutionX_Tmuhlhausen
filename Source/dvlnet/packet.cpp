@@ -1,7 +1,9 @@
 #include "dvlnet/packet.h"
 
+#include <algorithm>
 #include <cassert>
 #include <cstdint>
+#include <string_view>
 
 #ifdef PACKET_ENCRYPTION
 #include <sodium.h>
@@ -16,6 +18,43 @@
 #include "utils/str_cat.hpp"
 
 namespace devilution::net {
+
+namespace {
+
+salt_t LegacyPacketSalt()
+{
+#ifdef PACKET_ENCRYPTION
+	constexpr std::string_view LegacySalt = "W9bE9dQgVaeybwr2";
+	salt_t salt {};
+	std::copy_n(LegacySalt.begin(), std::min(LegacySalt.size(), salt.size()), salt.begin());
+	return salt;
+#else
+	return {};
+#endif
+}
+
+#ifdef PACKET_ENCRYPTION
+void DerivePacketKey(std::string &password, const salt_t &salt, key_t &key)
+{
+	if (sodium_init() < 0)
+		ABORT();
+	password.resize(std::min<std::size_t>(password.size(), crypto_pwhash_argon2id_PASSWD_MAX));
+	password.resize(std::max<std::size_t>(password.size(), crypto_pwhash_argon2id_PASSWD_MIN), 0);
+	const int status = crypto_pwhash(
+	    key.data(),
+	    crypto_secretbox_KEYBYTES,
+	    password.data(),
+	    password.size(),
+	    salt.data(),
+	    3 * crypto_pwhash_argon2id_OPSLIMIT_MIN,
+	    2 * crypto_pwhash_argon2id_MEMLIMIT_MIN,
+	    crypto_pwhash_ALG_ARGON2ID13);
+	if (status != 0)
+		ABORT();
+}
+#endif
+
+} // namespace
 
 #ifdef PACKET_ENCRYPTION
 
@@ -285,28 +324,30 @@ packet_factory::packet_factory()
 }
 
 packet_factory::packet_factory(std::string pw)
+    : packet_factory(std::move(pw), LegacyPacketSalt())
+{
+}
+
+packet_factory::packet_factory(std::string pw, salt_t salt)
 {
 	secure = false;
 
 #ifdef PACKET_ENCRYPTION
+	DerivePacketKey(pw, salt, key);
+	secure = true;
+#endif
+}
+
+salt_t packet_factory::GenerateSalt()
+{
+#ifdef PACKET_ENCRYPTION
 	if (sodium_init() < 0)
 		ABORT();
-	pw.resize(std::min<std::size_t>(pw.size(), crypto_pwhash_argon2id_PASSWD_MAX));
-	pw.resize(std::max<std::size_t>(pw.size(), crypto_pwhash_argon2id_PASSWD_MIN), 0);
-	std::string salt("W9bE9dQgVaeybwr2");
-	salt.resize(crypto_pwhash_argon2id_SALTBYTES, 0);
-	const int status = crypto_pwhash(
-	    key.data(),
-	    crypto_secretbox_KEYBYTES,
-	    pw.data(),
-	    pw.size(),
-	    reinterpret_cast<const unsigned char *>(salt.data()),
-	    3 * crypto_pwhash_argon2id_OPSLIMIT_MIN,
-	    2 * crypto_pwhash_argon2id_MEMLIMIT_MIN,
-	    crypto_pwhash_ALG_ARGON2ID13);
-	if (status != 0)
-		ABORT();
-	secure = true;
+	salt_t salt {};
+	randombytes_buf(salt.data(), salt.size());
+	return salt;
+#else
+	return {};
 #endif
 }
 
