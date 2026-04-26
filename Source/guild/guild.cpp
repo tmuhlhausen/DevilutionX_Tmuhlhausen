@@ -35,9 +35,10 @@ bool IsAcceptedGuildMember(const GuildMemberState &state)
 void ClearGuild()
 {
 	ActiveGuild = {};
-	for (GuildMemberState &state : MemberStates)
-		state = {};
-	NotifyGuildHallChanged(ActiveGuild);
+	for (size_t i = 0; i < MemberStates.size(); i++) {
+		MemberStates[i] = {};
+		Players[i].guildMemberState = {};
+	}
 }
 
 void RecountGuildState()
@@ -80,9 +81,11 @@ bool TryTransferOwnership(uint8_t previousLeader)
 	for (size_t i = 0; i < MemberStates.size(); i++) {
 		if (i == previousLeader)
 			continue;
-		if (MemberStates[i].guildId == guildId && IsAcceptedGuildMember(MemberStates[i]) && MemberStates[i].role == MemberRole::Officer) {
+		if (MemberStates[i].guildId == guildId && MemberStates[i].role == MemberRole::Officer && IsAcceptedGuildMember(MemberStates[i])) {
 			MemberStates[i].role = MemberRole::Leader;
 			MemberStates[i].permissions = PermissionsForRole(MemberStates[i].role);
+			Players[i].guildMemberState.role = MemberStates[i].role;
+			Players[i].guildMemberState.permissions = MemberStates[i].permissions;
 			return true;
 		}
 	}
@@ -93,6 +96,8 @@ bool TryTransferOwnership(uint8_t previousLeader)
 		if (MemberStates[i].guildId == guildId && IsAcceptedGuildMember(MemberStates[i])) {
 			MemberStates[i].role = MemberRole::Leader;
 			MemberStates[i].permissions = PermissionsForRole(MemberStates[i].role);
+			Players[i].guildMemberState.role = MemberStates[i].role;
+			Players[i].guildMemberState.permissions = MemberStates[i].permissions;
 			return true;
 		}
 	}
@@ -173,10 +178,10 @@ GuildMemberState GetGuildMemberState(uint8_t playerId)
 
 bool HasGuildInvite(uint8_t playerId)
 {
-	if (playerId >= MAX_PLRS)
-		return false;
-	const GuildMemberState &state = MemberStates[playerId];
-	return state.guildId.IsValid() && state.invited && state.role == MemberRole::None;
+	return playerId < MAX_PLRS
+	    && MemberStates[playerId].guildId.IsValid()
+	    && MemberStates[playerId].role == MemberRole::None
+	    && MemberStates[playerId].invited;
 }
 
 bool IsGuildRateLimited(uint8_t playerId, uint8_t actionKey, uint32_t minIntervalMs)
@@ -276,7 +281,8 @@ bool PromoteGuildMember(uint8_t promoterPlayerId, uint8_t targetPlayerId)
 
 	target.role = MemberRole::Officer;
 	target.permissions = PermissionsForRole(target.role);
-	NotifyGuildMemberChanged(targetPlayerId, target);
+	Players[targetPlayerId].guildMemberState.role = target.role;
+	Players[targetPlayerId].guildMemberState.permissions = target.permissions;
 	return true;
 }
 
